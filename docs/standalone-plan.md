@@ -1,6 +1,9 @@
 # Plan: Peppina without the hon integration
 
-Status: **draft for review** — nothing below is implemented yet.
+Status: **implemented** in 0.3.0 (cutover still to do). Differences from the
+draft: the client under `custom_components/peppina/hon/` is our own port, not
+vendored upstream files; temperature and spin speed are kept; paused is
+dropped.
 
 ## Why
 

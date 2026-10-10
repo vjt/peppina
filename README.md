@@ -7,12 +7,19 @@
 **A Home Assistant integration that lets you actually control a hOn washing
 machine: start it, stop it, schedule it.**
 
+[![HACS custom repository](https://img.shields.io/badge/HACS-custom-41BDF5.svg)](https://hacs.xyz/docs/faq/custom_repositories/)
+[![Release](https://img.shields.io/github/v/release/vjt/peppina)](https://github.com/vjt/peppina/releases)
+
+[![Open your Home Assistant instance and open this repository in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=vjt&repository=peppina&category=integration)
+[![Open your Home Assistant instance and start setting up Peppina.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=peppina)
+
 Haier, Candy and Hoover washers talk to the hOn cloud. The official hOn app
-is awful, and it cannot automate anything:
-no "finish by 9:00", no "tell me when it's done and keep telling me until I
-hang the laundry", no rules at all. The community hOn integrations read the
-machine fine, but none of them can **stop** a running program or own a
-**delayed start** that Home Assistant schedules itself.
+is awful. It can schedule a cycle and tell you when it's done, but only
+inside the app: nothing else in your house can see or act on any of it. No
+rule that knows who is home, no reminder that keeps going until the laundry
+is actually hung, no stop button you can wire to anything. The community hOn
+integrations read the machine fine, but none of them can **stop** a running
+program or own a **delayed start** that Home Assistant schedules itself.
 
 Peppina does both, with no other integration needed. It ships its own small
 hOn client (ported from [gvigroux/hon](https://github.com/gvigroux/hon)),
@@ -84,8 +91,10 @@ they are what the author runs on top of it:
 
 ## Install
 
-1. Copy `custom_components/peppina` into your `custom_components/`, or add
-   this repository to HACS as a custom integration.
+1. With HACS: use the "open this repository in HACS" button above (or add
+   `https://github.com/vjt/peppina` as a custom repository, type
+   Integration), then download Peppina. Without HACS: copy
+   `custom_components/peppina` into your `custom_components/`.
 2. Restart Home Assistant.
 3. Settings → Devices & services → Add integration → Peppina, and log in with
    your hOn app email and password.
@@ -96,6 +105,9 @@ the `peppina:` line from `configuration.yaml`.
 
 The appliance needs remote control enabled on its panel, as it does for the
 hOn app.
+
+The integration ships its own icon (`custom_components/peppina/brand/`),
+which Home Assistant shows from 2026.3 on.
 
 ## Known issues
 

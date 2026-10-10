@@ -14,8 +14,11 @@ machine: start it, stop it, schedule it.**
 [![Open your Home Assistant instance and start setting up Peppina.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=peppina)
 
 Haier, Candy and Hoover washers talk to the hOn cloud. The official hOn app
-is awful. It can schedule a cycle and tell you when it's done, but only
-inside the app: nothing else in your house can see or act on any of it. No
+is awful: it keeps losing the login, it takes forever to show the appliance,
+its statistics are bogus (the same figures reported over and over), and the
+UX is poor throughout. It can schedule a cycle and tell you when it's done,
+but only inside the app: nothing else in your house can see or act on any of
+it. No
 rule that knows who is home, no reminder that keeps going until the laundry
 is actually hung, no stop button you can wire to anything. The community hOn
 integrations read the machine fine, but none of them can **stop** a running

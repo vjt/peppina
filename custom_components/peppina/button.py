@@ -7,11 +7,9 @@ from . import DOMAIN
 from .entity import PeppinaEntity
 
 
-async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
-    if discovery_info is None:
-        return
+async def async_setup_entry(hass, entry, async_add_entities):
     entities = []
-    for washer in hass.data[DOMAIN]:
+    for washer in hass.data[DOMAIN][entry.entry_id]:
         entities += [PeppinaStart(washer), PeppinaStop(washer), PeppinaCancelDelay(washer)]
     async_add_entities(entities)
 

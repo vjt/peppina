@@ -17,7 +17,7 @@ const PHASES = {
 };
 const SPIN_PHASES = new Set([3, 11]);
 
-// hon machMode for washers: 1 ready, 2 running, 3 paused, 5 timer, 6 error, 7 done
+// hOn machMode for washers: 1 ready, 2 running, 3 paused, 5 timer, 6 error, 7 done
 const MODE_RUNNING = 2;
 const MODE_PAUSED = 3;
 const MODE_TIMER = 5;
@@ -322,9 +322,7 @@ class PeppinaCard extends HTMLElement {
     const on = this._val("status") === "on";
     const mode = Number(this._val("mode"));
     const phase = Number(this._val("phase"));
-    // hon leaves the pause flag up once the machine goes idle (mode 1)
-    const paused =
-      mode === MODE_PAUSED || (mode === MODE_RUNNING && this._val("paused") === "on");
+    const paused = mode === MODE_PAUSED;
     const error = this._val("error");
     const hasError = on && error && !/^0+$/.test(error);
     const running = on && mode === MODE_RUNNING && !paused;

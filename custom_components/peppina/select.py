@@ -8,10 +8,8 @@ from . import DOMAIN
 from .entity import PeppinaEntity
 
 
-async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
-    if discovery_info is None:
-        return
-    async_add_entities(PeppinaProgram(w) for w in hass.data[DOMAIN])
+async def async_setup_entry(hass, entry, async_add_entities):
+    async_add_entities(PeppinaProgram(w) for w in hass.data[DOMAIN][entry.entry_id])
 
 
 class PeppinaProgram(PeppinaEntity, SelectEntity, RestoreEntity):
@@ -39,6 +37,4 @@ class PeppinaProgram(PeppinaEntity, SelectEntity, RestoreEntity):
         if last is not None and last.state in programs:
             self._washer.program = last.state
         elif programs:
-            # hon's own current program is whichever it parsed last, not the
-            # one the appliance runs: fall back to the first, not to that.
             self._washer.program = programs[0]

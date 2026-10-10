@@ -1,109 +1,155 @@
-"""Peppina: program, start, stop and delayed start for hOn washing machines.
+"""Peppina: hOn washing machines, with a stop button.
 
-The gvigroux/hon integration talks to the appliance but exposes no way to
-stop a washing machine program. Peppina rides on top of its runtime (it does
-not log in to hOn by itself) and adds four controls per appliance that knows
-both the startProgram and stopProgram commands.
+Logs in to hOn by itself (see hon/) and, for every appliance that knows both
+the startProgram and stopProgram commands, adds its status sensors plus
+program, start, stop and delayed start controls.
 """
 from __future__ import annotations
 
-import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Callable
 
-from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, Platform
-from homeassistant.core import CoreState, HomeAssistant, callback
-from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers import device_registry as dr
-from homeassistant.helpers.discovery import async_load_platform
+import aiohttp
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import CONF_EMAIL, CONF_PASSWORD, Platform
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady, HomeAssistantError
+from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.helpers.typing import ConfigType
+from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+
+from .hon import Appliance, Command, HonAuthError, HonClient, HonError
 
 _LOGGER = logging.getLogger(__name__)
 
 DOMAIN = "peppina"
-HON = "hon"
-PLATFORMS = [Platform.SELECT, Platform.BUTTON, Platform.DATETIME]
-START = "startProgram"
-STOP = "stopProgram"
+PLATFORMS = [
+    Platform.SENSOR,
+    Platform.BINARY_SENSOR,
+    Platform.SELECT,
+    Platform.BUTTON,
+    Platform.DATETIME,
+]
+UPDATE_INTERVAL = timedelta(seconds=60)
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Load the platforms once hon has had the chance to load its devices."""
+    from .dashboard import async_setup_dashboard
 
-    async def _load(_event=None) -> None:
-        hass.data[DOMAIN] = discover_washers(hass)
-        _LOGGER.info("Peppina found %d appliance(s)", len(hass.data[DOMAIN]))
-        await asyncio.gather(
-            *(async_load_platform(hass, p, DOMAIN, {}, config) for p in PLATFORMS)
-        )
-        from .dashboard import async_setup_dashboard
-
-        await async_setup_dashboard(hass, hass.data[DOMAIN])
-
-    if hass.state is CoreState.running:
-        await _load()
-    else:
-        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STARTED, _load)
+    await async_setup_dashboard(hass)
     return True
 
 
-def discover_washers(hass: HomeAssistant) -> list[Washer]:
-    """Every hon device that can both start and stop a program."""
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    client = HonClient(
+        async_get_clientsession(hass), entry.data[CONF_EMAIL], entry.data[CONF_PASSWORD]
+    )
     washers = []
-    for entry in dr.async_get(hass).devices.values():
-        if not any(ident[0] == HON for ident in entry.identifiers):
-            continue
-        washer = Washer(hass, entry)
-        device = washer.hon_device(required=False)
-        if device is not None and START in device.commands and STOP in device.commands:
-            washers.append(washer)
-    return washers
+    try:
+        for info in await client.appliances():
+            appliance = Appliance(info)
+            appliance.load_commands(await client.commands(info))
+            if appliance.is_washer:
+                washers.append(Washer(hass, entry, client, appliance))
+    except HonAuthError as err:
+        raise ConfigEntryError(f"hOn refused the credentials: {err}") from err
+    except (aiohttp.ClientError, TimeoutError, HonError) as err:
+        raise ConfigEntryNotReady(f"hOn is unreachable: {err}") from err
+    _LOGGER.info("Peppina found %d appliance(s)", len(washers))
+
+    for washer in washers:
+        await washer.coordinator.async_config_entry_first_refresh()
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = washers
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    from .dashboard import async_save_dashboard
+
+    await async_save_dashboard(hass)
+    return True
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
+        return False
+    # The entities are gone by now: dropping the timer leaves their restored
+    # state alone, so a pending delayed start comes back after a reload.
+    for washer in hass.data[DOMAIN].pop(entry.entry_id):
+        washer.cancel_delayed_start()
+
+    from .dashboard import async_save_dashboard
+
+    await async_save_dashboard(hass)
+    return True
 
 
 class Washer:
-    """One hOn appliance, as seen through the hon integration runtime."""
+    """One hOn appliance: its client, its poller and the Peppina-side state."""
 
-    def __init__(self, hass: HomeAssistant, entry: dr.DeviceEntry) -> None:
+    def __init__(
+        self, hass: HomeAssistant, entry: ConfigEntry, client: HonClient, appliance: Appliance
+    ) -> None:
         self.hass = hass
-        self.device_id = entry.id
-        self.name = entry.name_by_user or entry.name or "hOn"
-        # hon registers 3-tuples: (domain, mac, appliance type)
-        self.mac = next(ident[1] for ident in entry.identifiers if ident[0] == HON)
+        self.client = client
+        self.appliance = appliance
+        self.mac = appliance.mac
+        self.name = appliance.name
+        info = appliance.info
+        self.device_info = DeviceInfo(
+            identifiers={(DOMAIN, self.mac)},
+            name=self.name,
+            manufacturer=info.get("brand"),
+            model=info.get("modelName"),
+            sw_version=info.get("fwVersion"),
+            serial_number=info.get("serialNumber"),
+        )
+        self.coordinator = DataUpdateCoordinator(
+            hass,
+            _LOGGER,
+            config_entry=entry,
+            name=f"{DOMAIN} {self.name}",
+            update_interval=UPDATE_INTERVAL,
+            update_method=self._async_update,
+        )
         self.program: str | None = None
         self.delayed_start: datetime | None = None
         self._unsub_delayed: Callable[[], None] | None = None
         self._listeners: list[Callable[[], None]] = []
 
-    def hon_device(self, required: bool = True):
-        for connection in hass_hon_connections(self.hass):
-            device = connection.get_device(self.hass, self.device_id)
-            if device is not None:
-                return device
-        if required:
-            raise HomeAssistantError(f"{self.name}: hon has not loaded this appliance")
-        return None
+    async def _async_update(self) -> dict:
+        try:
+            self.appliance.load_context(await self.client.context(self.appliance))
+        except (aiohttp.ClientError, TimeoutError, HonError) as err:
+            raise UpdateFailed(f"{self.name}: {err}") from err
+        return self.appliance.parameters
 
     @property
     def programs(self) -> list[str]:
-        device = self.hon_device(required=False)
-        if device is None or START not in device.commands:
-            return []
-        return list(device.commands[START].get_programs().keys())
+        return self.appliance.programs
 
     async def start(self) -> None:
-        device = self.hon_device()
         program = self.program
         if program not in self.programs:
             raise HomeAssistantError(f"{self.name}: unknown program {program!r}")
-        if not await device.start_command(program).send():
-            raise HomeAssistantError(f"{self.name}: hOn rejected start of {program}")
+        await self._send(self.appliance.start_command(program), f"start of {program}")
 
     async def stop(self) -> None:
         self.cancel_delayed_start()
-        if not await self.hon_device().stop_command().send():
-            raise HomeAssistantError(f"{self.name}: hOn rejected stop")
+        await self._send(self.appliance.stop_command(), "stop")
+
+    async def _send(self, command: Command, what: str) -> None:
+        try:
+            accepted = await self.client.send(self.appliance, command)
+        except (aiohttp.ClientError, TimeoutError, HonError) as err:
+            raise HomeAssistantError(f"{self.name}: {what} failed: {err}") from err
+        if not accepted:
+            raise HomeAssistantError(f"{self.name}: hOn rejected {what}")
+        await self.coordinator.async_request_refresh()
 
     def schedule_start(self, when: datetime) -> None:
         self.cancel_delayed_start()
@@ -136,8 +182,3 @@ class Washer:
     def _notify(self) -> None:
         for listener in list(self._listeners):
             listener()
-
-
-def hass_hon_connections(hass: HomeAssistant) -> list:
-    """hon stores one connection per account next to its own bookkeeping."""
-    return [c for c in hass.data.get(HON, {}).values() if hasattr(c, "get_device")]

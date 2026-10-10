@@ -1,19 +1,19 @@
 {
   "domain": "peppina",
   "name": "Peppina",
+  "after_dependencies": [
+    "lovelace"
+  ],
   "codeowners": [
     "@vjt"
   ],
+  "config_flow": true,
   "dependencies": [
-    "frontend",
-    "hon"
+    "frontend"
   ],
   "documentation": "https://github.com/vjt/peppina",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/vjt/peppina/issues",
   "requirements": [],
-  "version": "0.2.0",
-  "after_dependencies": [
-    "lovelace"
-  ]
+  "version": "0.3.0"
 }

@@ -1,0 +1,21 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Account hOn",
+        "description": "L'email e la password che usi nell'app hOn.",
+        "data": {
+          "email": "Email",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "hOn ha rifiutato queste credenziali.",
+      "cannot_connect": "hOn non risponde, riprova più tardi."
+    },
+    "abort": {
+      "already_configured": "Questo account hOn è già configurato."
+    }
+  }
+}

@@ -15,7 +15,7 @@ from homeassistant.components.http import StaticPathConfig
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
-from . import DOMAIN, HON, Washer
+from . import DOMAIN, PLATFORMS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -25,23 +25,19 @@ ICON = "mdi:washing-machine"
 CARD_URL = "/peppina/peppina-card.js"
 CARD_FILE = Path(__file__).parent / "www" / "peppina-card.js"
 
-# Card role -> tail of the hon unique_id (after the mac).
-STATUS = {
-    "status": "on_off_status",
-    "mode": "mach_mode",
-    "phase": "pr_phase",
+# Card role -> tail of our unique_id (after the mac).
+ROLES = {
+    "status": "status",
+    "mode": "mode",
+    "phase": "program_phase",
     "program": "program_name",
-    "remaining": "remaining_time_m_m",
-    "end": "end time",
-    "temp": "temp",
+    "remaining": "remaining_time",
+    "end": "end_time",
+    "temp": "temperature",
     "spin": "spin_speed",
     "door": "door_status",
-    "remote": "remote_ctr_valid",
-    "paused": "pause",
-    "error": "errors",
-}
-# Card role -> tail of our own unique_id.
-CONTROLS = {
+    "remote": "remote_control",
+    "error": "error",
     "select": "program",
     "start": "start",
     "stop": "stop",
@@ -50,7 +46,7 @@ CONTROLS = {
 }
 
 
-async def async_setup_dashboard(hass: HomeAssistant, washers: list[Washer]) -> None:
+async def async_setup_dashboard(hass: HomeAssistant) -> None:
     await hass.http.async_register_static_paths(
         [StaticPathConfig(CARD_URL, str(CARD_FILE), cache_headers=False)]
     )
@@ -66,13 +62,17 @@ async def async_setup_dashboard(hass: HomeAssistant, washers: list[Washer]) -> N
         require_admin=False,
         update=True,
     )
+
+
+async def async_save_dashboard(hass: HomeAssistant) -> None:
+    """Rewrite the page from the washers of every loaded entry."""
     try:
-        await _save(hass, washers)
+        await _save(hass, [w for ws in hass.data.get(DOMAIN, {}).values() for w in ws])
     except (AttributeError, KeyError, TypeError, ImportError, OSError):
         _LOGGER.exception("Dashboard setup failed, Lovelace internals may have changed")
 
 
-async def _save(hass: HomeAssistant, washers: list[Washer]) -> None:
+async def _save(hass: HomeAssistant, washers: list) -> None:
     from homeassistant.components.lovelace.dashboard import LovelaceStorage
 
     lovelace = hass.data.get("lovelace")
@@ -97,14 +97,9 @@ async def _save(hass: HomeAssistant, washers: list[Washer]) -> None:
     views = []
     for washer in washers:
         entities = {}
-        for role, key in STATUS.items():
-            for domain in ("sensor", "binary_sensor"):
-                entity_id = registry.async_get_entity_id(domain, HON, f"{washer.mac}_{key}")
-                if entity_id:
-                    entities[role] = entity_id
-        for role, key in CONTROLS.items():
-            for domain in ("select", "button", "datetime"):
-                unique_id = f"{DOMAIN}_{washer.mac}_{key}"
+        for role, key in ROLES.items():
+            unique_id = f"{DOMAIN}_{washer.mac}_{key}"
+            for domain in PLATFORMS:
                 entity_id = registry.async_get_entity_id(domain, DOMAIN, unique_id)
                 if entity_id:
                     entities[role] = entity_id

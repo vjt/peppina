@@ -1,0 +1,21 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "hOn account",
+        "description": "The email and password you use in the hOn app.",
+        "data": {
+          "email": "Email",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "hOn refused these credentials.",
+      "cannot_connect": "Could not reach hOn, try again later."
+    },
+    "abort": {
+      "already_configured": "This hOn account is already configured."
+    }
+  }
+}

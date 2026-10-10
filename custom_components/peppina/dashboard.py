@@ -1,4 +1,4 @@
-"""Sidebar dashboard: one page per install, status on the left, controls on the right.
+"""Sidebar dashboard: one full-page washing machine card per appliance.
 
 Same approach as ha-verisure-italy: register a storage-mode Lovelace panel and
 rewrite its config on every load from what the entity registry holds. It rides
@@ -8,8 +8,10 @@ the controls keep working without the page.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from homeassistant.components import frontend
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
@@ -20,22 +22,40 @@ _LOGGER = logging.getLogger(__name__)
 URL = "peppina"
 TITLE = "Peppina"
 ICON = "mdi:washing-machine"
+CARD_URL = "/peppina/peppina-card.js"
+CARD_FILE = Path(__file__).parent / "www" / "peppina-card.js"
 
-# hon entities worth showing, by the tail of their unique_id (after the mac).
-STATUS = [
-    "mach_mode",
-    "pr_phase",
-    "program_name",
-    "remaining_time_m_m",
-    "end time",
-    "door_status",
-    "remote_ctr_valid",
-    "errors",
-]
-CONTROLS = ["program", "start", "stop", "delayed_start", "cancel_delayed_start"]
+# Card role -> tail of the hon unique_id (after the mac).
+STATUS = {
+    "status": "on_off_status",
+    "mode": "mach_mode",
+    "phase": "pr_phase",
+    "program": "program_name",
+    "remaining": "remaining_time_m_m",
+    "end": "end time",
+    "temp": "temp",
+    "spin": "spin_speed",
+    "door": "door_status",
+    "remote": "remote_ctr_valid",
+    "paused": "pause",
+    "error": "errors",
+}
+# Card role -> tail of our own unique_id.
+CONTROLS = {
+    "select": "program",
+    "start": "start",
+    "stop": "stop",
+    "delayed": "delayed_start",
+    "cancel": "cancel_delayed_start",
+}
 
 
 async def async_setup_dashboard(hass: HomeAssistant, washers: list[Washer]) -> None:
+    await hass.http.async_register_static_paths(
+        [StaticPathConfig(CARD_URL, str(CARD_FILE), cache_headers=False)]
+    )
+    # mtime busts the browser cache when the card changes
+    frontend.add_extra_js_url(hass, f"{CARD_URL}?v={int(CARD_FILE.stat().st_mtime)}")
     frontend.async_register_built_in_panel(
         hass,
         component_name="lovelace",
@@ -74,38 +94,30 @@ async def _save(hass: HomeAssistant, washers: list[Washer]) -> None:
         lovelace.dashboards[URL] = storage
 
     registry = er.async_get(hass)
-    sections = []
+    views = []
     for washer in washers:
-        status = [
-            registry.async_get_entity_id(domain, HON, f"{washer.mac}_{key}")
-            for key in STATUS
-            for domain in ("sensor", "binary_sensor")
-        ]
-        controls = [
-            registry.async_get_entity_id(domain, DOMAIN, f"{DOMAIN}_{washer.mac}_{key}")
-            for key in CONTROLS
-            for domain in ("select", "button", "datetime")
-        ]
-        sections.append(_grid(f"{washer.name}: stato", status))
-        sections.append(_grid(f"{washer.name}: comandi", controls))
+        entities = {}
+        for role, key in STATUS.items():
+            for domain in ("sensor", "binary_sensor"):
+                entity_id = registry.async_get_entity_id(domain, HON, f"{washer.mac}_{key}")
+                if entity_id:
+                    entities[role] = entity_id
+        for role, key in CONTROLS.items():
+            for domain in ("select", "button", "datetime"):
+                unique_id = f"{DOMAIN}_{washer.mac}_{key}"
+                entity_id = registry.async_get_entity_id(domain, DOMAIN, unique_id)
+                if entity_id:
+                    entities[role] = entity_id
+        views.append(
+            {
+                "title": washer.name,
+                "path": "default" if not views else washer.mac,
+                "icon": ICON,
+                "type": "panel",
+                "cards": [
+                    {"type": "custom:peppina-card", "name": washer.name, "entities": entities}
+                ],
+            }
+        )
 
-    await storage.async_save(
-        {
-            "views": [
-                {
-                    "title": TITLE,
-                    "path": "default",
-                    "icon": ICON,
-                    "type": "sections",
-                    "max_columns": 2,
-                    "sections": sections,
-                }
-            ]
-        }
-    )
-
-
-def _grid(heading: str, entity_ids: list[str | None]) -> dict:
-    cards = [{"type": "heading", "heading": heading}]
-    cards += [{"type": "tile", "entity": e} for e in entity_ids if e is not None]
-    return {"type": "grid", "cards": cards}
+    await storage.async_save({"views": views})

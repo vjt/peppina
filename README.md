@@ -15,6 +15,10 @@ every hon appliance that supports both `startProgram` and `stopProgram`:
 | `datetime.<name>_avvio_ritardato` | start the selected program at that instant |
 | `button.<name>_annulla_avvio_ritardato` | drop the pending delayed start |
 
+It also adds a **Peppina** sidebar dashboard: one full-page card per appliance
+with the machine drawn in SVG (the drum turns while it washes, the whole thing
+shakes on the spin) and the controls next to it.
+
 The delayed start is scheduled by Home Assistant, not by the appliance: a
 still-future start survives a restart, a missed one is dropped.
 

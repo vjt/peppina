@@ -1,4 +1,5 @@
-"""Program names from hOn's dictionary (cached) and the starts Peppina sent."""
+"""Program names from hOn's dictionary (cached), the starts Peppina sent and
+the machine's duration estimates."""
 from __future__ import annotations
 
 import asyncio
@@ -74,3 +75,31 @@ class Usage:
         programs = self._counts.setdefault(mac, {})
         programs[program] = programs.get(program, 0) + 1
         self._store.async_delay_save(lambda: self._counts, 10)
+
+
+class Durations:
+    """Per appliance and program, kept in .storage (see hon/durations.py):
+    the machine's last estimate (minutes), how long the last cycle really
+    took (actual), and the temperature and spin they are for."""
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        self._store = Store(hass, 1, "peppina.durations")
+        self._data: dict[str, dict[str, dict]] = {}
+
+    async def async_load(self) -> None:
+        self._data = await self._store.async_load() or {}
+
+    def get(self, mac: str) -> dict[str, dict]:
+        return self._data.get(mac, {})
+
+    def keep(self, mac: str, reading: dict) -> bool:
+        """Merge a reading {program, minutes and/or actual, temp, spin};
+        False if it changed nothing."""
+        programs = self._data.setdefault(mac, {})
+        old = programs.get(reading["program"], {})
+        new = {**old, **{k: reading[k] for k in ("minutes", "actual", "temp", "spin") if k in reading}}
+        if new == old:
+            return False
+        programs[reading["program"]] = new
+        self._store.async_delay_save(lambda: self._data, 10)
+        return True

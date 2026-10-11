@@ -171,6 +171,15 @@ class HonClient:
             return {}
         return payload
 
+    async def last_activity(self, appliance: Appliance) -> dict:
+        """What hOn kept of the appliance's last cycle: activityStarted,
+        activityEnded and attributes (program code, knob position, settings,
+        remainingTimeMM at its start); {} if nothing."""
+        data = await self._request(
+            "GET", "/commands/v1/retrieve-last-activity", params={"macAddress": appliance.mac}
+        )
+        return data or {}
+
     async def context(self, appliance: Appliance) -> dict:
         params = {
             "macAddress": appliance.mac,
@@ -203,6 +212,9 @@ class HonClient:
             "parameters": parameters,
             "applianceType": appliance.type_name,
         }
+        if command.program is not None:
+            # As the hOn app sends it; without it hOn keeps no program name.
+            body["programName"] = command.key.upper()
         _LOGGER.debug("Sending %s", body)
         data = await self._request("POST", "/commands/v1/send", json=body)
         if (data.get("payload") or {}).get("resultCode") == "0":

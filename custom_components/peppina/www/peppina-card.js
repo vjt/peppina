@@ -36,6 +36,7 @@ const STRINGS = {
   mostUsed: "Più usati",
   others: "Altri",
   noMatch: "Nessun programma trovato",
+  more: "Descrizione completa",
   tags: { guided: "guidato", care: "cura capi", download: "scaricato", featured: "in evidenza" },
   load: (kg) => `max ${kg.toLocaleString("it-IT")} kg`,
   temp: ([lo, hi]) => {
@@ -45,8 +46,32 @@ const STRINGS = {
   },
   spin: (rpm) => `${rpm} giri`,
   times: (n) => `${n}×`,
+  duration: (minutes) => {
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return h ? `${h} h${m ? ` ${m} min` : ""}` : `${m} min`;
+  },
+  // How long the program takes: its last cycle when known, else the
+  // machine's estimate; at the settings they were for.
+  estimate: (d) => `≈ ${STRINGS.duration(d.actual || d.minutes)}`,
+  estimateNote: ({ actual, temp, spin }) => {
+    const at = [
+      temp != null && (Number(temp) === 0 ? "a freddo" : `a ${temp}°C`),
+      spin != null && (Number(spin) === 0 ? "senza centrifuga" : `${spin} giri`),
+    ].filter(Boolean);
+    const what = actual ? "Durata dell'ultimo lavaggio" : "Stima della macchina";
+    return `${what}${at.length ? `, ${at.join(" e ")}` : ""}`;
+  },
+  startAt: "Avvia alle",
+  endAt: "Finisci alle",
+  startLabel: "Avvio alle",
+  endLabel: "Fine alle",
+  endsAround: (time) => `Fine ≈ ${time}`,
+  startsAt: (time) => `Avvio alle ${time}`,
+  noDuration: "Durata non nota",
+  tooSoon: "Troppo presto",
 };
-const MOST_USED = 5;
+const MOST_USED = 10;
 
 const el = (tag, cls, text) => {
   const node = document.createElement(tag);
@@ -57,10 +82,43 @@ const el = (tag, cls, text) => {
 const fold = (text) => text.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
 const tagged = (p) => (p.tag ? `${p.name} · ${STRINGS.tags[p.tag] || p.tag}` : p.name);
 const facts = (p) => [
+  p.duration && STRINGS.estimate(p.duration),
   p.load && STRINGS.load(p.load),
   p.temp && STRINGS.temp(p.temp),
   p.spin && STRINGS.spin(p.spin),
 ].filter(Boolean);
+
+// ?peppina_viewport in the dashboard URL shows how the browser sizes the
+// page, to see what a webview does with the keyboard (docs/program-picker.md).
+function viewportProbe(root) {
+  if (!new URLSearchParams(location.search).has("peppina_viewport")) return;
+  const box = el("div", "vprobe");
+  const units = ["vh", "dvh", "svh", "lvh"].map((unit) => {
+    const probe = el("div", "vunit");
+    probe.style.height = `100${unit}`;
+    root.append(probe);
+    return [unit, probe];
+  });
+  const meta = document.querySelector('meta[name="viewport"]');
+  const show = () => {
+    const vv = window.visualViewport;
+    box.textContent = [
+      `window ${innerWidth}×${innerHeight}`,
+      vv
+        ? `visual ${Math.round(vv.width)}×${Math.round(vv.height)} @${Math.round(vv.offsetTop)} ×${vv.scale}`
+        : "no visualViewport",
+      units.map(([unit, probe]) => `100${unit}=${probe.offsetHeight}`).join(" "),
+      `meta ${meta ? meta.content : "-"}`,
+    ].join("\n");
+  };
+  root.append(box);
+  show();
+  for (const target of [window.visualViewport, window].filter(Boolean)) {
+    target.addEventListener("resize", show);
+    target.addEventListener("scroll", show);
+  }
+  document.addEventListener("focusin", show);
+}
 
 // The program field and its sheet: search, the most used first, then hOn's
 // groups in the order the integration sorted them. Plain DOM in the card's
@@ -70,11 +128,13 @@ class ProgramPicker {
     const $ = (sel) => root.querySelector(sel);
     this.$ = {
       box: $(".programbox"), field: $(".field"), name: $(".pname"), desc: $(".pdesc"),
-      chips: $(".pchips"), sheet: $(".sheet"), search: $(".search"), list: $(".list"),
+      chips: $(".pchips"), note: $(".pnote"), sheet: $(".sheet"), search: $(".search"),
+      list: $(".list"),
     };
     this._onPick = onPick;
     this._programs = [];
     this._onKey = (e) => e.key === "Escape" && this.close();
+    this._fit = () => this._fitViewport();
     this.$.field.addEventListener("click", () => this.open());
     $(".close").addEventListener("click", () => this.close());
     $(".backdrop").addEventListener("click", () => this.close());
@@ -82,12 +142,30 @@ class ProgramPicker {
       this.$.list.scrollTop = 0;
       this._render();
     });
+    // The whole description, two lines until tapped.
+    this.$.desc.addEventListener("click", () => this.$.desc.classList.toggle("full"));
     this.$.list.addEventListener("click", (e) => {
+      const more = e.target.closest(".pexp");
+      if (more) {
+        const row = more.closest(".prow");
+        more.setAttribute("aria-expanded", String(row.classList.toggle("full")));
+        return;
+      }
       const row = e.target.closest(".prow");
-      if (!row) return;
-      this.close();
-      if (row.dataset.key !== this._value) this._onPick(row.dataset.key);
+      if (row) this._pick(row);
     });
+    this.$.list.addEventListener("keydown", (e) => {
+      const row = e.target.classList && e.target.classList.contains("prow") && e.target;
+      if (row && (e.key === "Enter" || e.key === " ")) {
+        e.preventDefault();
+        this._pick(row);
+      }
+    });
+  }
+
+  _pick(row) {
+    this.close();
+    if (row.dataset.key !== this._value) this._onPick(row.dataset.key);
   }
 
   // sel: the program select's state, a new object whenever it changes.
@@ -109,7 +187,9 @@ class ProgramPicker {
     const p = this._programs.find((x) => x.key === sel.state);
     this.$.name.textContent = p ? tagged(p) : prettyProgram(sel.state || "");
     this.$.desc.textContent = (p && p.description) || "";
+    this.$.desc.classList.remove("full");
     this.$.chips.replaceChildren(...(p ? facts(p) : []).map((t) => el("span", "chip", t)));
+    this.$.note.textContent = p && p.duration ? STRINGS.estimateNote(p.duration) : "";
     if (this.isOpen) this._render();
   }
 
@@ -121,6 +201,12 @@ class ProgramPicker {
     this.$.search.value = "";
     this.$.sheet.classList.remove("hidden");
     document.addEventListener("keydown", this._onKey);
+    const vv = window.visualViewport;
+    if (vv) {
+      vv.addEventListener("resize", this._fit);
+      vv.addEventListener("scroll", this._fit);
+      this._fitViewport();
+    }
     this.$.list.scrollTop = 0;
     this._render();
     const sel = this.$.list.querySelector(".prow.sel");
@@ -132,7 +218,24 @@ class ProgramPicker {
     if (!this.isOpen) return;
     this.$.sheet.classList.add("hidden");
     document.removeEventListener("keydown", this._onKey);
+    const vv = window.visualViewport;
+    if (vv) {
+      vv.removeEventListener("resize", this._fit);
+      vv.removeEventListener("scroll", this._fit);
+    }
+    for (const prop of ["top", "bottom", "height"]) this.$.sheet.style.removeProperty(prop);
     this.$.field.focus({ preventScroll: true });
+  }
+
+  // The keyboard covers the bottom of the page without shrinking it: on iOS
+  // always, and anywhere with Home Assistant's viewport meta, which has no
+  // interactive-widget. Pinned to the visual viewport, the sheet stays above.
+  _fitViewport() {
+    const vv = window.visualViewport;
+    const style = this.$.sheet.style;
+    style.top = `${vv.offsetTop}px`;
+    style.bottom = "auto";
+    style.height = `${vv.height}px`;
   }
 
   _render() {
@@ -159,16 +262,32 @@ class ProgramPicker {
   }
 
   _row(p) {
-    const row = el("button", p.key === this._value ? "prow sel" : "prow");
-    row.type = "button";
+    // Not a button: it holds the button that opens the whole description.
+    const row = el("div", p.key === this._value ? "prow sel" : "prow");
+    row.setAttribute("role", "button");
+    row.tabIndex = 0;
     row.dataset.key = p.key;
     const head = el("span", "ptop");
     head.append(el("span", "pn", p.name));
     if (p.tag) head.append(el("span", "ptag", STRINGS.tags[p.tag] || p.tag));
-    const meta = p.usage > 0 ? STRINGS.times(p.usage) : p.load ? STRINGS.load(p.load) : "";
+    for (const pill of [p.temp && STRINGS.temp(p.temp), p.spin && STRINGS.spin(p.spin)]) {
+      if (pill) head.append(el("span", "ppill", pill));
+    }
+    const meta = [
+      p.duration && STRINGS.duration(p.duration.actual || p.duration.minutes),
+      p.usage > 0 ? STRINGS.times(p.usage) : !p.duration && p.load && STRINGS.load(p.load),
+    ].filter(Boolean).join(" · ");
     if (meta) head.append(el("span", "pmeta", meta));
     row.append(head);
-    if (p.description) row.append(el("span", "pd", p.description));
+    if (p.description) {
+      const line = el("div", "pdline");
+      const more = el("button", "pexp", "▾");
+      more.type = "button";
+      more.setAttribute("aria-label", STRINGS.more);
+      more.setAttribute("aria-expanded", "false");
+      line.append(el("span", "pd", p.description), more);
+      row.append(line);
+    }
     return row;
   }
 }
@@ -267,13 +386,24 @@ const STYLE = `
   }
   .chip.warn { background: rgba(255, 170, 0, 0.18); color: var(--warning-color, #b36b00); }
   .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  .row > * { flex: 1 1 140px; }
+  .row > * { flex: 1 1 140px; min-width: 0; }
+  .sched { align-items: flex-end; }
+  .btns { display: flex; gap: 10px; }
+  .btns > button { flex: 1; min-width: 0; }
+  .seg { display: flex; gap: 6px; }
+  .seg button { flex: 1; padding: 6px 10px; font-size: 0.85em; }
+  .seg button.on { background: var(--primary-color, #03a9f4); color: var(--text-primary-color, #fff); }
   label { font-size: 0.8em; opacity: 0.7; display: block; margin-bottom: 4px; }
   select, input[type=time] {
     width: 100%; box-sizing: border-box; font: inherit; font-size: 1em;
     padding: 10px 12px; border-radius: 12px;
     border: 1px solid var(--divider-color, #ccc);
     background: var(--primary-background-color); color: var(--primary-text-color);
+  }
+  /* iOS gives time fields a width of their own, past their column. */
+  input[type=time] {
+    display: block; min-width: 0; max-width: 100%; min-height: 2.75em;
+    -webkit-appearance: none; appearance: none;
   }
   button {
     font: inherit; font-weight: 600; font-size: 1em; cursor: pointer;
@@ -298,8 +428,12 @@ const STYLE = `
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
   }
   .pdesc:empty { display: none; }
+  .pdesc { cursor: pointer; }
+  .pdesc.full { display: block; -webkit-line-clamp: unset; overflow: visible; }
   .pchips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
   .pchips .chip { padding: 3px 9px; font-size: 0.8em; }
+  .pnote { font-size: 0.75em; opacity: 0.6; margin-top: 4px; }
+  .pnote:empty { display: none; }
   .sheet {
     position: fixed; inset: 0; z-index: 10;
     display: flex; align-items: flex-end; justify-content: center;
@@ -308,8 +442,7 @@ const STYLE = `
     position: absolute; inset: 0; background: rgba(0, 0, 0, 0.45); touch-action: none;
   }
   .sheetbox {
-    position: relative; width: min(100%, 560px); max-height: 85vh; max-height: 85dvh;
-    box-sizing: border-box;
+    position: relative; width: min(100%, 560px); max-height: 85%; box-sizing: border-box;
     display: flex; flex-direction: column;
     background: var(--card-background-color, #fff); color: var(--primary-text-color);
     border-radius: 20px 20px 0 0; box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.25);
@@ -318,7 +451,8 @@ const STYLE = `
   }
   .sheethead { display: flex; gap: 8px; padding: 12px; touch-action: none; }
   .sheethead .search {
-    flex: 1; min-width: 0; box-sizing: border-box; font: inherit; font-size: 1em;
+    flex: 1; min-width: 0; box-sizing: border-box; font: inherit;
+    font-size: max(16px, 1em); /* smaller, iOS zooms the page on focus */
     padding: 10px 12px; border-radius: 12px; border: 1px solid var(--divider-color, #ccc);
     background: var(--primary-background-color); color: var(--primary-text-color);
   }
@@ -329,26 +463,43 @@ const STYLE = `
     opacity: 0.55; padding: 14px 10px 4px;
   }
   .prow {
-    display: block; width: 100%; text-align: left; font-weight: normal;
-    background: none; border-radius: 12px; padding: 9px 10px;
+    display: block; box-sizing: border-box; width: 100%; text-align: left; cursor: pointer;
+    border-radius: 12px; padding: 9px 10px;
   }
   .prow:hover { background: var(--secondary-background-color, #eee); }
   .prow.sel { background: rgba(3, 169, 244, 0.14); }
   .ptop { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-  .pn { font-weight: 600; }
+  .pn { font-weight: 600; min-width: 0; }
   .ptag {
     font-size: 0.72em; padding: 1px 7px; border-radius: 999px; white-space: nowrap;
     background: var(--secondary-background-color, #eee);
   }
-  .pmeta { margin-left: auto; font-size: 0.8em; opacity: 0.6; white-space: nowrap; }
+  .ppill {
+    flex: none; font-size: 0.72em; padding: 1px 7px; border-radius: 999px; white-space: nowrap;
+    background: var(--secondary-background-color, #eee);
+  }
+  .pmeta { flex: none; margin-left: auto; font-size: 0.8em; opacity: 0.6; white-space: nowrap; }
+  .pdline { display: flex; align-items: flex-start; gap: 4px; margin-top: 2px; }
   .pd {
-    display: block; font-size: 0.82em; opacity: 0.65; margin-top: 2px;
+    flex: 1; min-width: 0; font-size: 0.82em; opacity: 0.65;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
+  .prow.full .pd { white-space: normal; }
+  .pexp {
+    flex: none; padding: 0 6px; background: none; font-weight: normal; font-size: 0.8em;
+    opacity: 0.6; transition: transform 0.15s ease;
+  }
+  .prow.full .pexp { transform: rotate(180deg); }
   .empty { padding: 24px; text-align: center; opacity: 0.6; }
+  .vprobe {
+    position: fixed; top: 4px; left: 4px; z-index: 20; pointer-events: none;
+    background: rgba(0, 0, 0, 0.75); color: #7CFC00; font: 11px/1.3 monospace;
+    padding: 6px 8px; border-radius: 6px; white-space: pre;
+  }
+  .vunit { position: fixed; top: 0; left: -10px; width: 1px; visibility: hidden; }
   @media (min-width: 700px) {
     .sheet { align-items: center; }
-    .sheetbox { border-radius: 20px; max-height: 80vh; max-height: 80dvh; }
+    .sheetbox { border-radius: 20px; max-height: 80%; }
   }
   .hidden { display: none !important; }
   .side { display: flex; flex-direction: column; align-items: center; gap: 20px;
@@ -478,6 +629,57 @@ class PeppinaCard extends HTMLElement {
     return s && !["unknown", "unavailable"].includes(s.state) ? s.state : undefined;
   }
 
+  // Minutes the selected program takes: its last cycle, else the machine's estimate.
+  _duration() {
+    const sel = this._state("select");
+    const programs = (sel && sel.attributes.programs) || [];
+    const p = sel && programs.find((x) => x.key === sel.state);
+    return p && p.duration ? p.duration.actual || p.duration.minutes : undefined;
+  }
+
+  // What a schedule would do with the time typed: in "Avvia alle" start
+  // then (and end after the program's duration, when known); in "Finisci
+  // alle" start the duration before. {start, end} or {error}.
+  _plan() {
+    const value = this.$.when.value || "";
+    const [h, m] = value.split(":").map(Number);
+    if (!value || !Number.isFinite(h) || !Number.isFinite(m)) return undefined;
+    const at = new Date();
+    at.setHours(h, m, 0, 0);
+    if (at <= new Date()) at.setDate(at.getDate() + 1);
+    const minutes = this._duration();
+    if (this._mode === "start") {
+      return { start: at, end: minutes ? new Date(at.getTime() + minutes * 60000) : undefined };
+    }
+    if (!minutes) return { error: STRINGS.noDuration };
+    const start = new Date(at.getTime() - minutes * 60000);
+    return start <= new Date() ? { error: STRINGS.tooSoon } : { start, end: at };
+  }
+
+  _updateSchedule() {
+    for (const button of this.$.modes) button.classList.toggle("on", button.dataset.mode === this._mode);
+    this.$.wlabel.textContent = this._mode === "start" ? STRINGS.startLabel : STRINGS.endLabel;
+    const plan = this._plan();
+    let other = "\u00a0";  // keeps the two columns level
+    if (plan && plan.error) other = plan.error;
+    else if (plan && this._mode === "end") other = STRINGS.startsAt(hhmm(plan.start));
+    else if (plan && plan.end) other = STRINGS.endsAround(hhmm(plan.end));
+    this.$.other.textContent = other;
+    this.$.schedule.disabled = !this._canSchedule || !plan || !!plan.error;
+  }
+
+  // The running program as the picker names it, and when the cycle ends.
+  _cycleLine(end) {
+    const key = this._val("program");
+    const known = key && key !== "No program";
+    const programs = ((this._state("select") || {}).attributes || {}).programs || [];
+    const p = known && programs.find((x) => x.key === key);
+    const name = p ? tagged(p) : known ? prettyProgram(key) : "";
+    const ends = end ? `finisce alle ${hhmm(end)}` : "";
+    const line = [name, ends].filter(Boolean).join(" · ");
+    return line.charAt(0).toUpperCase() + line.slice(1);
+  }
+
   _call(domain, service, role, data = {}) {
     const id = this._id(role);
     if (!id) return;
@@ -519,6 +721,7 @@ class PeppinaCard extends HTMLElement {
               <button class="field" type="button"><span class="pname"></span><span class="caret">▾</span></button>
               <div class="pdesc"></div>
               <div class="pchips"></div>
+              <div class="pnote"></div>
             </div>
           </div>
           <div class="row">
@@ -533,10 +736,19 @@ class PeppinaCard extends HTMLElement {
             <div><label>Avvio automatico</label><div class="autostate"></div></div>
             <button class="autotoggle"></button>
           </div>
-          <div class="row">
-            <div><label>Avvio alle</label><input type="time" class="when"></div>
-            <button class="schedule">Programma</button>
-            <button class="cancel">Annulla</button>
+          <div class="seg">
+            <button type="button" class="smode" data-mode="start">${STRINGS.startAt}</button>
+            <button type="button" class="smode" data-mode="end">${STRINGS.endAt}</button>
+          </div>
+          <div class="row sched">
+            <div><label class="wlabel"></label><input type="time" class="when"></div>
+            <div>
+              <label class="other"></label>
+              <div class="btns">
+                <button class="schedule">Programma</button>
+                <button class="cancel">Annulla</button>
+              </div>
+            </div>
           </div>
         </div>
         </div>
@@ -558,9 +770,28 @@ class PeppinaCard extends HTMLElement {
       settemp: $(".settemp"), setspin: $(".setspin"),
       auto: $(".auto"), autostate: $(".autostate"), autotoggle: $(".autotoggle"),
       stop: $(".stop"), when: $(".when"), schedule: $(".schedule"), cancel: $(".cancel"),
+      modes: [...root.querySelectorAll(".smode")], wlabel: $(".wlabel"), other: $(".other"),
     };
+    try {
+      this._mode = localStorage.getItem("peppina-schedule-mode") === "end" ? "end" : "start";
+    } catch (err) {
+      this._mode = "start";
+    }
+    for (const button of this.$.modes) {
+      button.addEventListener("click", () => {
+        this._mode = button.dataset.mode;
+        try {
+          localStorage.setItem("peppina-schedule-mode", this._mode);
+        } catch (err) {
+          // private browsing: the choice lasts until the page reloads
+        }
+        this._updateSchedule();
+      });
+    }
+    this.$.when.addEventListener("input", () => this._updateSchedule());
     this.picker = new ProgramPicker(root, (option) =>
       this._call("select", "select_option", "select", { option }));
+    viewportProbe(root);
     for (const role of ["settemp", "setspin"]) {
       this.$[role].addEventListener("change", (e) =>
         this._call("select", "select_option", role, { option: e.target.value }));
@@ -571,12 +802,10 @@ class PeppinaCard extends HTMLElement {
     this.$.stop.addEventListener("click", () => this._call("button", "press", "stop"));
     this.$.cancel.addEventListener("click", () => this._call("button", "press", "cancel"));
     this.$.schedule.addEventListener("click", () => {
-      const [h, m] = (this.$.when.value || "").split(":").map(Number);
-      if (Number.isNaN(h) || Number.isNaN(m)) return;
-      const at = new Date();
-      at.setHours(h, m, 0, 0);
-      if (at <= new Date()) at.setDate(at.getDate() + 1);
-      this._call("datetime", "set_value", "delayed", { datetime: at.toISOString() });
+      const plan = this._plan();
+      if (plan && plan.start) {
+        this._call("datetime", "set_value", "delayed", { datetime: plan.start.toISOString() });
+      }
     });
     this._built = true;
   }
@@ -617,7 +846,7 @@ class PeppinaCard extends HTMLElement {
       const h = Math.floor(remaining / 60);
       lcd = Number.isFinite(remaining) ? `${h}:${String(remaining % 60).padStart(2, "0")}` : "--:--";
       big = paused ? "In pausa" : PHASES[phase] || "Lava";
-      small = end ? `Finisce alle ${hhmm(end)}` : "";
+      small = this._cycleLine(end);
     } else if (delayed) {
       lcd = hhmm(delayed);
       big = "Programmata";
@@ -625,7 +854,7 @@ class PeppinaCard extends HTMLElement {
     } else if (on && mode === MODE_TIMER) {
       lcd = "TIMER";
       big = "Timer della macchina";
-      small = end ? `Finisce alle ${hhmm(end)}` : "";
+      small = this._cycleLine(end);
     } else if (on && mode === MODE_DONE) {
       lcd = "END";
       big = "Finita";
@@ -640,8 +869,6 @@ class PeppinaCard extends HTMLElement {
     this.$.small.textContent = small;
 
     const chips = [];
-    const program = this._val("program");
-    if (program && program !== "No program" && (running || paused)) chips.push(program);
     const temp = this._val("temp");
     if (temp && (running || paused)) chips.push(`${temp}°C`);
     const spin = this._val("spin");
@@ -691,12 +918,17 @@ class PeppinaCard extends HTMLElement {
     const canStart = on && remote && !running && !paused;
     this.$.start.disabled = !canStart;
     this.$.stop.disabled = !(running || paused || delayed);
-    this.$.schedule.disabled = !(on && remote && !running);
+    this._canSchedule = on && remote && !running;
     this.$.cancel.classList.toggle("hidden", !delayed);
     if (delayed && this.shadowRoot.activeElement !== this.$.when) {
-      this.$.when.value = `${String(delayed.getHours()).padStart(2, "0")}:${String(
-        delayed.getMinutes()).padStart(2, "0")}`;
+      // In "Finisci alle" the field shows when the pending start ends.
+      const minutes = this._duration();
+      const shown = this._mode === "end" && minutes
+        ? new Date(delayed.getTime() + minutes * 60000) : delayed;
+      this.$.when.value = `${String(shown.getHours()).padStart(2, "0")}:${String(
+        shown.getMinutes()).padStart(2, "0")}`;
     }
+    this._updateSchedule();
   }
 }
 

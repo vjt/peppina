@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import unicodedata
 from collections import Counter, defaultdict
+from datetime import datetime
 
 from .appliance import Appliance, Command
 
@@ -28,6 +29,10 @@ GROUP_ORDER = (
     "business",
 )
 CLUSTER_KEY = "GUIDED_WASHING.CLUSTER."
+# machMode with a cycle on: running, paused, waiting on the machine's timer.
+CYCLE_MODES = ("2", "3", "5")
+# Seconds between a start command and the cycle it starts (1.5 measured).
+START_WINDOW = 120
 # When names collide, the family tells programs apart; the knob one gets none.
 TAG_FAMILIES = ("care", "guided", "voice", "download", "featured")
 TAG_ALIASES = {"voice": "guided"}
@@ -70,13 +75,77 @@ def usage(appliance: Appliance, own: dict[str, int]) -> dict[str, int]:
             counted = int(float(appliance.get(f"program{position}") or 0))
         except (TypeError, ValueError):
             continue
-        if knob := _knob(appliance, programs):
-            result[knob] += max(0, counted - sum(own.get(p, 0) for p in programs))
+        if owner := knob(appliance, programs):
+            result[owner] += max(0, counted - sum(own.get(p, 0) for p in programs))
     return result
 
 
-def _knob(appliance: Appliance, programs: list[str]) -> str | None:
-    """The position's program printed on the knob: hOn's dashboard family,
+def program_codes(appliance: Appliance, code: object, position: object = None) -> list[str]:
+    """Programs with this program code (and knob position, if given)."""
+    found = []
+    for program in appliance.programs:
+        command = appliance.start_command(program)
+        param = command.parameters.get("prCode")
+        if param is None or param.typology != "fixed" or str(param.default) != str(code):
+            continue
+        if position is None or str(position) in command.info("prPosition"):
+            found.append(program)
+    return found
+
+
+def running_program(appliance: Appliance) -> str | None:
+    """The program the current cycle runs, None without a cycle or a sure answer.
+
+    hOn keeps no programName for Peppina's starts (measured 2026-10-11), but
+    its context keeps the command that started the cycle: Peppina's own
+    "program" parameter, or the one program whose fixed values it carries.
+    A cycle no command started came from the knob: the knob program of its
+    program code.
+    """
+    if appliance.get("machMode") not in CYCLE_MODES:
+        return None
+    if (named := appliance.program_name) in appliance.programs:
+        return named
+    history = appliance.context.get("commandHistory") or {}
+    command = history.get("command") or {}
+    sent = command.get("parameters") or {}
+    code = appliance.get("prCode")
+    if (
+        command.get("commandName") == "startProgram"
+        and str(sent.get("prCode")) == str(code)
+        and _started(history, appliance.context.get("activity") or {})
+    ):
+        if sent.get("program") in appliance.programs:
+            return sent["program"]
+        fits = [p for p in program_codes(appliance, code) if _fits(appliance.start_command(p), command)]
+        return fits[0] if len(fits) == 1 else None
+    return knob(appliance, program_codes(appliance, code))
+
+
+def _started(history: dict, activity: dict) -> bool:
+    """Whether the command was executed right before the activity started."""
+    try:
+        executed = datetime.fromisoformat(history["timestampExecuted"].replace("Z", "+00:00"))
+        started = datetime.fromisoformat(activity["activityStarted"].replace("Z", "+00:00"))
+    except (KeyError, AttributeError, ValueError):
+        return False
+    return 0 <= (started - executed).total_seconds() <= START_WINDOW
+
+
+def _fits(command: Command, sent: dict) -> bool:
+    """Whether every fixed value of the program is the one the command carried."""
+    for params, values in (
+        (command.parameters, sent.get("parameters") or {}),
+        (command.ancillary, sent.get("ancillaryParameters") or {}),
+    ):
+        for key, param in params.items():
+            if param.typology == "fixed" and key in values and str(param.default) != str(values[key]):
+                return False
+    return True
+
+
+def knob(appliance: Appliance, programs: list[str]) -> str | None:
+    """Which of these programs is printed on the knob: hOn's dashboard family,
     else the one hqd_ program; None when that is not one program."""
     for found in (
         [p for p in programs if "dashboard" in appliance.start_command(p).info("programFamily")],
@@ -87,8 +156,18 @@ def _knob(appliance: Appliance, programs: list[str]) -> str | None:
     return None
 
 
-def describe(appliance: Appliance, texts: dict[str, str], own: dict[str, int]) -> list[dict]:
-    """Every program for the card, by group then by name."""
+def describe(
+    appliance: Appliance,
+    texts: dict[str, str],
+    own: dict[str, int],
+    durations: dict[str, dict] | None = None,
+) -> list[dict]:
+    """Every program for the card, by group then by name.
+
+    durations: the machine's last estimate per program (see durations.py),
+    {minutes, temp, spin}; a program it never estimated gets None.
+    """
+    durations = durations or {}
     counts = usage(appliance, own)
     programs, families = [], {}
     for program in appliance.programs:
@@ -110,6 +189,7 @@ def describe(appliance: Appliance, texts: dict[str, str], own: dict[str, int]) -
                 "temp": [temps[0], temps[-1]] if temps else None,
                 "spin": spins[-1] if spins else None,
                 "usage": counts[program],
+                "duration": durations.get(program),
             }
         )
         families[program] = command.info("programFamily")

@@ -13,9 +13,10 @@ const test = (name, fn) => {
   try { fn(); console.log("ok  ", name); } catch (e) { failures++; console.log("FAIL", name, "\n     ", e.message); }
 };
 
-function mount({ withPrograms = true, state = "hqd_smart", options } = {}) {
-  const dom = new JSDOM("<!doctype html><body></body>", { runScripts: "outside-only" });
+function mount({ withPrograms = true, state = "hqd_smart", options, url, viewport } = {}) {
+  const dom = new JSDOM("<!doctype html><body></body>", { runScripts: "outside-only", url: url || "https://ha.local/peppina" });
   const { window } = dom;
+  if (viewport) window.visualViewport = Object.assign(new window.EventTarget(), viewport);
   window.eval(source);
   const calls = [];
   const states = {
@@ -23,9 +24,13 @@ function mount({ withPrograms = true, state = "hqd_smart", options } = {}) {
     "sensor.m": { state: "1", attributes: {} },
     "binary_sensor.r": { state: "on", attributes: {}, last_changed: new Date().toISOString() },
     "select.p": { state, attributes: { options: options || programs.map((p) => p.key), ...(withPrograms ? { programs } : {}) } },
+    "sensor.program": { state: "No program", attributes: {} },
+    "sensor.end": { state: "unknown", attributes: {} },
+    "datetime.d": { state: "unknown", attributes: {} },
   };
   const card = window.document.createElement("peppina-card");
-  card.setConfig({ entities: { status: "binary_sensor.s", mode: "sensor.m", remote: "binary_sensor.r", select: "select.p" } });
+  card.setConfig({ entities: { status: "binary_sensor.s", mode: "sensor.m", remote: "binary_sensor.r", select: "select.p",
+    program: "sensor.program", end: "sensor.end", delayed: "datetime.d" } });
   window.document.body.appendChild(card);
   const hass = () => ({ states: { ...states }, callService: (d, s, data) => calls.push([d, s, data]) });
   card.hass = hass();
@@ -44,8 +49,26 @@ test("the field replaces the native select and describes the program", () => {
   assert.equal(t.$("select.program"), null);
   assert.equal(t.$(".pname").textContent, "Smart A.I.");
   assert.match(t.$(".pdesc").textContent, /Intelligenza Artificiale/);
-  assert.deepEqual(t.$$(".pchips .chip").map((c) => c.textContent), ["max 9 kg", "freddo–60°C", "1200 giri"]);
+  assert.deepEqual(t.$$(".pchips .chip").map((c) => c.textContent),
+    ["≈ 1 h 21 min", "max 9 kg", "freddo–60°C", "1200 giri"]);
+  assert.equal(t.$(".pnote").textContent, "Stima della macchina, a 40°C e 1200 giri");
   assert.equal(t.sheetOpen(), false);
+});
+
+test("the duration sits next to each program that has one, and nowhere else", () => {
+  const t = mount();
+  t.$(".field").click();
+  const meta = (key) => t.$(`.prow[data-key="${key}"] .pmeta`)?.textContent;
+  assert.equal(meta("hqd_smart"), "1 h 21 min · 192×");
+  assert.equal(meta("hqd_eco_40_60_degrees"), "2 h 50 min · 38×");
+  assert.equal(meta("hqd_cottons"), "4×");
+  assert.equal(meta("hqd_quick_15"), "max 1,8 kg");
+});
+
+test("a program without an estimate shows no duration", () => {
+  const t = mount({ state: "hqd_cottons" });
+  assert.ok(!t.$$(".pchips .chip").some((c) => c.textContent.startsWith("≈")));
+  assert.equal(t.$(".pnote").textContent, "");
 });
 
 test("the sheet opens with the most used first, then hOn's groups", () => {
@@ -56,8 +79,10 @@ test("the sheet opens with the most used first, then hOn's groups", () => {
   assert.deepEqual(names, ["Smart A.I.", "Eco 40-60", "Baby Care", "Cotone", "Sintetici"]);
   assert.deepEqual(t.headers(), ["Più usati", "Tradizionali", "Rapidi", "Eco", "Delicati", "Macchie",
     "Salute", "Casa", "Sport", "Baby", "Pets", "Ariel", "Dash", "Business", "Altri"]);
-  assert.equal(t.rows().length, 92 + 5);
-  assert.equal(t.rows()[0].querySelector(".pmeta").textContent, "192×");
+  const used = programs.filter((p) => p.usage > 0).length;
+  assert.equal(t.headers()[0], "Più usati");
+  assert.equal(t.rows().length, 92 + Math.min(10, used));  // up to ten most used
+  assert.equal(t.rows()[0].querySelector(".pmeta").textContent, "1 h 21 min · 192×");
   assert.ok(t.rows()[0].classList.contains("sel"));
 });
 
@@ -138,6 +163,156 @@ test("unavailable, the field keeps the program and turns off", () => {
   assert.equal(t.$(".pname").textContent, "Smart A.I.");
   assert.equal(t.$(".field").disabled, true);
   assert.equal(t.sheetOpen(), false);
+});
+
+test("while washing, the card says which program runs, by its dictionary name", () => {
+  const t = mount();
+  const end = new Date(Date.now() + 90 * 60000);
+  t.states["sensor.m"] = { state: "2", attributes: {} };
+  t.states["sensor.program"] = { state: "hqd_synthetic_and_coloured", attributes: {} };
+  t.states["sensor.end"] = { state: end.toISOString(), attributes: {} };
+  t.card.hass = t.hass();
+  const hhmm = end.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+  assert.equal(t.$(".small").textContent, `Sintetici · finisce alle ${hhmm}`);
+  assert.ok(!t.$$(".chips .chip").some((c) => c.textContent.includes("hqd_")));
+  // A namesake keeps its tag; an unknown key reads as before; no program, no name.
+  t.states["sensor.program"] = { state: "iot_wash_cotton", attributes: {} };
+  t.card.hass = t.hass();
+  assert.equal(t.$(".small").textContent, `Cotone · guidato · finisce alle ${hhmm}`);
+  t.states["sensor.program"] = { state: "No program", attributes: {} };
+  t.card.hass = t.hass();
+  assert.equal(t.$(".small").textContent, `Finisce alle ${hhmm}`);
+});
+
+test("with the keyboard up, the sheet keeps to the visible part of the screen", () => {
+  // iOS: the keyboard shrinks the visual viewport only, and may pan it.
+  const t = mount({ viewport: { height: 844, offsetTop: 0 } });
+  const vv = t.window.visualViewport;
+  const style = t.$(".sheet").style;
+  t.$(".field").click();
+  assert.equal(style.height, "844px");
+  vv.height = 500;
+  vv.dispatchEvent(new t.window.Event("resize"));
+  assert.equal(style.height, "500px");
+  vv.offsetTop = 120;
+  vv.dispatchEvent(new t.window.Event("scroll"));
+  assert.equal(style.top, "120px");
+  t.$(".close").click();
+  assert.equal(style.height, "");
+  assert.equal(style.top, "");
+  vv.height = 300;
+  vv.dispatchEvent(new t.window.Event("resize"));  // closed: not listening any more
+  assert.equal(style.height, "");
+});
+
+test("without visualViewport the sheet keeps its CSS", () => {
+  const t = mount();
+  t.$(".field").click();
+  assert.equal(t.$(".sheet").style.height, "");
+});
+
+test("the viewport probe shows only when asked for", () => {
+  assert.equal(mount().$(".vprobe"), null);
+  const t = mount({ url: "https://ha.local/peppina?peppina_viewport", viewport: { height: 500, offsetTop: 0, width: 390, scale: 1 } });
+  assert.match(t.$(".vprobe").textContent, /visual 390×500/);
+});
+
+test("each row shows temperature and spin pills on the name's line", () => {
+  const t = mount();
+  t.$(".field").click();
+  const head = t.$('.prow[data-key="hqd_cottons"] .ptop');
+  assert.deepEqual([...head.querySelectorAll(".ppill")].map((x) => x.textContent), ["freddo–90°C", "1400 giri"]);
+});
+
+test("descriptions read whole: tap in the card, the arrow in the list", () => {
+  const t = mount();
+  const desc = t.$(".pdesc");
+  desc.click();
+  assert.ok(desc.classList.contains("full"));
+  desc.click();
+  assert.ok(!desc.classList.contains("full"));
+  t.$(".field").click();
+  const row = t.$('.prow[data-key="hqd_cottons"]');
+  row.querySelector(".pexp").click();
+  assert.ok(row.classList.contains("full"));
+  assert.equal(row.querySelector(".pexp").getAttribute("aria-expanded"), "true");
+  assert.equal(t.sheetOpen(), true);  // opening the description picks nothing
+  assert.equal(t.calls.length, 0);
+});
+
+test("a row picks with Enter too", () => {
+  const t = mount();
+  t.$(".field").click();
+  const row = t.$('.prow[data-key="hqd_cottons"]');
+  row.dispatchEvent(new t.window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  assert.equal(JSON.parse(JSON.stringify(t.calls))[0][2].option, "hqd_cottons");
+});
+
+const hhmm = (d) => d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+const pad = (n) => String(n).padStart(2, "0");
+const typed = (t, date) => {
+  t.$(".when").value = `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  t.$(".when").dispatchEvent(new t.window.Event("input"));
+};
+const inMinutes = (n) => { const d = new Date(Date.now() + n * 60000); d.setSeconds(0, 0); return d; };
+
+test("the schedule row: a label on both columns", () => {
+  const t = mount();
+  assert.equal(t.$(".wlabel").textContent, "Avvio alle");
+  assert.equal(t.$(".other").textContent, "\u00a0");
+  assert.equal(t.$(".sched").children.length, 2);
+});
+
+test("Avvia alle: says when it ends, from the program's duration", () => {
+  const t = mount();  // Smart A.I.: 81 minutes
+  const start = inMinutes(120);
+  typed(t, start);
+  assert.equal(t.$(".other").textContent, `Fine ≈ ${hhmm(new Date(start.getTime() + 81 * 60000))}`);
+  t.$(".schedule").click();
+  const call = JSON.parse(JSON.stringify(t.calls)).pop();
+  assert.equal(call[1], "set_value");
+  assert.equal(new Date(call[2].datetime).getTime(), start.getTime());
+});
+
+test("Finisci alle: starts the program's duration before", () => {
+  const t = mount();
+  t.$('.smode[data-mode="end"]').click();
+  assert.equal(t.$(".wlabel").textContent, "Fine alle");
+  const end = inMinutes(300);
+  typed(t, end);
+  const start = new Date(end.getTime() - 81 * 60000);
+  assert.equal(t.$(".other").textContent, `Avvio alle ${hhmm(start)}`);
+  assert.equal(t.$(".schedule").disabled, false);
+  t.$(".schedule").click();
+  const call = JSON.parse(JSON.stringify(t.calls)).pop();
+  assert.equal(new Date(call[2].datetime).getTime(), start.getTime());
+  assert.equal(t.window.localStorage.getItem("peppina-schedule-mode"), "end");
+});
+
+test("Finisci alle: no duration, or too soon, no schedule", () => {
+  const t = mount({ state: "hqd_cottons" });  // never estimated
+  t.$('.smode[data-mode="end"]').click();
+  typed(t, inMinutes(300));
+  assert.equal(t.$(".other").textContent, "Durata non nota");
+  assert.equal(t.$(".schedule").disabled, true);
+  const smart = mount();
+  smart.$('.smode[data-mode="end"]').click();
+  typed(smart, inMinutes(30));  // 81 minutes do not fit
+  assert.equal(smart.$(".other").textContent, "Troppo presto");
+  assert.equal(smart.$(".schedule").disabled, true);
+});
+
+test("a real duration wins over the estimate", () => {
+  const real = programs.map((p) => p.key === "hqd_smart"
+    ? { ...p, duration: { ...p.duration, actual: 90 } } : p);
+  const t = mount();
+  t.states["select.p"] = { ...t.states["select.p"], attributes: { ...t.states["select.p"].attributes, programs: real } };
+  t.card.hass = t.hass();
+  assert.ok(t.$$(".pchips .chip").some((c) => c.textContent === "≈ 1 h 30 min"));
+  assert.match(t.$(".pnote").textContent, /^Durata dell'ultimo lavaggio/);
+  const start = inMinutes(60);
+  typed(t, start);
+  assert.equal(t.$(".other").textContent, `Fine ≈ ${hhmm(new Date(start.getTime() + 90 * 60000))}`);
 });
 
 test("without the programs attribute it falls back to the keys", () => {

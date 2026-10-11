@@ -94,3 +94,46 @@ def test_dictionary():
     client = HonClient(ConfigSession("it"), "user@example.com", "hunter2")
     data = asyncio.run(client.dictionary(URL))
     assert data["PROGRAMS"]["WM_WD"]["HQD_COTTONS"] == "Cotone"
+
+
+def test_last_activity():
+    client = HonClient(None, "user@example.com", "hunter2")
+    appliance = type("A", (), {"mac": "aa-bb-cc-dd-ee-ff"})()
+
+    async def request(method, path, **kwargs):
+        assert (method, path) == ("GET", "/commands/v1/retrieve-last-activity")
+        assert kwargs["params"] == {"macAddress": "aa-bb-cc-dd-ee-ff"}
+        return answer
+
+    client._request = request
+    answer = {"macAddress": "aa-bb-cc-dd-ee-ff", "attributes": {"prCode": "124", "remainingTimeMM": "81"}}
+    assert asyncio.run(client.last_activity(appliance)) == answer
+    answer = {}
+    assert asyncio.run(client.last_activity(appliance)) == {}
+
+
+def test_start_carries_the_program_name():
+    # As the hOn app and pyhOn send it: hOn's context had no program name for
+    # Peppina's starts without it (2026-10-11).
+    from hon import Appliance
+
+    appliance = Appliance({"macAddress": "aa-bb-cc-dd-ee-ff", "applianceTypeId": 1})
+    appliance.load_commands(
+        {
+            "applianceModel": {"options": {}},
+            "startProgram": {"PROGRAMS.WM_WD.HQD_COTTONS": {"parameters": {}}},
+            "stopProgram": {"parameters": {}},
+        }
+    )
+    client = HonClient(None, "user@example.com", "hunter2")
+    bodies = []
+
+    async def request(method, path, **kwargs):
+        bodies.append(kwargs["json"])
+        return {"payload": {"resultCode": "0"}}
+
+    client._request = request
+    assert asyncio.run(client.send(appliance, appliance.start_command("hqd_cottons")))
+    assert asyncio.run(client.send(appliance, appliance.stop_command()))
+    assert bodies[0]["programName"] == "PROGRAMS.WM_WD.HQD_COTTONS"
+    assert "programName" not in bodies[1]

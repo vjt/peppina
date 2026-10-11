@@ -13,9 +13,10 @@ const test = (name, fn) => {
   try { fn(); console.log("ok  ", name); } catch (e) { failures++; console.log("FAIL", name, "\n     ", e.message); }
 };
 
-function mount({ withPrograms = true, state = "hqd_smart", options } = {}) {
-  const dom = new JSDOM("<!doctype html><body></body>", { runScripts: "outside-only" });
+function mount({ withPrograms = true, state = "hqd_smart", options, url, viewport } = {}) {
+  const dom = new JSDOM("<!doctype html><body></body>", { runScripts: "outside-only", url: url || "https://ha.local/peppina" });
   const { window } = dom;
+  if (viewport) window.visualViewport = Object.assign(new window.EventTarget(), viewport);
   window.eval(source);
   const calls = [];
   const states = {
@@ -178,6 +179,39 @@ test("while washing, the card says which program runs, by its dictionary name", 
   t.states["sensor.program"] = { state: "No program", attributes: {} };
   t.card.hass = t.hass();
   assert.equal(t.$(".small").textContent, `Finisce alle ${hhmm}`);
+});
+
+test("with the keyboard up, the sheet keeps to the visible part of the screen", () => {
+  // iOS: the keyboard shrinks the visual viewport only, and may pan it.
+  const t = mount({ viewport: { height: 844, offsetTop: 0 } });
+  const vv = t.window.visualViewport;
+  const style = t.$(".sheet").style;
+  t.$(".field").click();
+  assert.equal(style.height, "844px");
+  vv.height = 500;
+  vv.dispatchEvent(new t.window.Event("resize"));
+  assert.equal(style.height, "500px");
+  vv.offsetTop = 120;
+  vv.dispatchEvent(new t.window.Event("scroll"));
+  assert.equal(style.top, "120px");
+  t.$(".close").click();
+  assert.equal(style.height, "");
+  assert.equal(style.top, "");
+  vv.height = 300;
+  vv.dispatchEvent(new t.window.Event("resize"));  // closed: not listening any more
+  assert.equal(style.height, "");
+});
+
+test("without visualViewport the sheet keeps its CSS", () => {
+  const t = mount();
+  t.$(".field").click();
+  assert.equal(t.$(".sheet").style.height, "");
+});
+
+test("the viewport probe shows only when asked for", () => {
+  assert.equal(mount().$(".vprobe"), null);
+  const t = mount({ url: "https://ha.local/peppina?peppina_viewport", viewport: { height: 500, offsetTop: 0, width: 390, scale: 1 } });
+  assert.match(t.$(".vprobe").textContent, /visual 390×500/);
 });
 
 test("without the programs attribute it falls back to the keys", () => {

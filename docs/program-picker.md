@@ -163,6 +163,26 @@ had started remotely at 13:29 (mode 2).
   app and pyhOn do. Not measured: whether hOn then reports it. That needs
   a start.
 
+## Keyboard on iPhone (added after 0.5.0)
+
+vjt saw the search field end up under the keyboard in the Home Assistant
+app on iPhone.
+
+- **Measured:** Home Assistant's frontend (20260826.7, the one in 2026.9.4)
+  declares `width=device-width,user-scalable=no,viewport-fit=cover,initial-scale=1`.
+  There is no `interactive-widget`, so the keyboard shrinks only the visual
+  viewport: on iOS always, and in Chrome too. `vh` and `dvh` do not follow it.
+- **Fix:** while the sheet is open it pins itself to `visualViewport`
+  (top = `offsetTop`, height = `height`, on resize and scroll). Its box
+  takes at most 85% of that. The search field is at least 16 px, so iOS
+  does not zoom the page on focus.
+- **Not measured: the app's webview itself.** The checks ran in jsdom, with
+  a simulated `visualViewport`. To measure on the phone, open the
+  dashboard with `?peppina_viewport` at the end of the URL: a box shows the
+  window size, the visual viewport (size, offset, scale), `100vh`, `dvh`,
+  `svh` and `lvh` in pixels, and the viewport meta, live, keyboard up or
+  down.
+
 ## Not in this change
 - **The card in other languages**: program names, descriptions and groups
   already follow Home Assistant's language, through the dictionary. The rest

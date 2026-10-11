@@ -77,6 +77,38 @@ const facts = (p) => [
   p.spin && STRINGS.spin(p.spin),
 ].filter(Boolean);
 
+// ?peppina_viewport in the dashboard URL shows how the browser sizes the
+// page, to see what a webview does with the keyboard (docs/program-picker.md).
+function viewportProbe(root) {
+  if (!new URLSearchParams(location.search).has("peppina_viewport")) return;
+  const box = el("div", "vprobe");
+  const units = ["vh", "dvh", "svh", "lvh"].map((unit) => {
+    const probe = el("div", "vunit");
+    probe.style.height = `100${unit}`;
+    root.append(probe);
+    return [unit, probe];
+  });
+  const meta = document.querySelector('meta[name="viewport"]');
+  const show = () => {
+    const vv = window.visualViewport;
+    box.textContent = [
+      `window ${innerWidth}×${innerHeight}`,
+      vv
+        ? `visual ${Math.round(vv.width)}×${Math.round(vv.height)} @${Math.round(vv.offsetTop)} ×${vv.scale}`
+        : "no visualViewport",
+      units.map(([unit, probe]) => `100${unit}=${probe.offsetHeight}`).join(" "),
+      `meta ${meta ? meta.content : "-"}`,
+    ].join("\n");
+  };
+  root.append(box);
+  show();
+  for (const target of [window.visualViewport, window].filter(Boolean)) {
+    target.addEventListener("resize", show);
+    target.addEventListener("scroll", show);
+  }
+  document.addEventListener("focusin", show);
+}
+
 // The program field and its sheet: search, the most used first, then hOn's
 // groups in the order the integration sorted them. Plain DOM in the card's
 // shadow root; texts only ever go through textContent.
@@ -91,6 +123,7 @@ class ProgramPicker {
     this._onPick = onPick;
     this._programs = [];
     this._onKey = (e) => e.key === "Escape" && this.close();
+    this._fit = () => this._fitViewport();
     this.$.field.addEventListener("click", () => this.open());
     $(".close").addEventListener("click", () => this.close());
     $(".backdrop").addEventListener("click", () => this.close());
@@ -138,6 +171,12 @@ class ProgramPicker {
     this.$.search.value = "";
     this.$.sheet.classList.remove("hidden");
     document.addEventListener("keydown", this._onKey);
+    const vv = window.visualViewport;
+    if (vv) {
+      vv.addEventListener("resize", this._fit);
+      vv.addEventListener("scroll", this._fit);
+      this._fitViewport();
+    }
     this.$.list.scrollTop = 0;
     this._render();
     const sel = this.$.list.querySelector(".prow.sel");
@@ -149,7 +188,24 @@ class ProgramPicker {
     if (!this.isOpen) return;
     this.$.sheet.classList.add("hidden");
     document.removeEventListener("keydown", this._onKey);
+    const vv = window.visualViewport;
+    if (vv) {
+      vv.removeEventListener("resize", this._fit);
+      vv.removeEventListener("scroll", this._fit);
+    }
+    for (const prop of ["top", "bottom", "height"]) this.$.sheet.style.removeProperty(prop);
     this.$.field.focus({ preventScroll: true });
+  }
+
+  // The keyboard covers the bottom of the page without shrinking it: on iOS
+  // always, and anywhere with Home Assistant's viewport meta, which has no
+  // interactive-widget. Pinned to the visual viewport, the sheet stays above.
+  _fitViewport() {
+    const vv = window.visualViewport;
+    const style = this.$.sheet.style;
+    style.top = `${vv.offsetTop}px`;
+    style.bottom = "auto";
+    style.height = `${vv.height}px`;
   }
 
   _render() {
@@ -330,8 +386,7 @@ const STYLE = `
     position: absolute; inset: 0; background: rgba(0, 0, 0, 0.45); touch-action: none;
   }
   .sheetbox {
-    position: relative; width: min(100%, 560px); max-height: 85vh; max-height: 85dvh;
-    box-sizing: border-box;
+    position: relative; width: min(100%, 560px); max-height: 85%; box-sizing: border-box;
     display: flex; flex-direction: column;
     background: var(--card-background-color, #fff); color: var(--primary-text-color);
     border-radius: 20px 20px 0 0; box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.25);
@@ -340,7 +395,8 @@ const STYLE = `
   }
   .sheethead { display: flex; gap: 8px; padding: 12px; touch-action: none; }
   .sheethead .search {
-    flex: 1; min-width: 0; box-sizing: border-box; font: inherit; font-size: 1em;
+    flex: 1; min-width: 0; box-sizing: border-box; font: inherit;
+    font-size: max(16px, 1em); /* smaller, iOS zooms the page on focus */
     padding: 10px 12px; border-radius: 12px; border: 1px solid var(--divider-color, #ccc);
     background: var(--primary-background-color); color: var(--primary-text-color);
   }
@@ -368,9 +424,15 @@ const STYLE = `
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .empty { padding: 24px; text-align: center; opacity: 0.6; }
+  .vprobe {
+    position: fixed; top: 4px; left: 4px; z-index: 20; pointer-events: none;
+    background: rgba(0, 0, 0, 0.75); color: #7CFC00; font: 11px/1.3 monospace;
+    padding: 6px 8px; border-radius: 6px; white-space: pre;
+  }
+  .vunit { position: fixed; top: 0; left: -10px; width: 1px; visibility: hidden; }
   @media (min-width: 700px) {
     .sheet { align-items: center; }
-    .sheetbox { border-radius: 20px; max-height: 80vh; max-height: 80dvh; }
+    .sheetbox { border-radius: 20px; max-height: 80%; }
   }
   .hidden { display: none !important; }
   .side { display: flex; flex-direction: column; align-items: center; gap: 20px;
@@ -596,6 +658,7 @@ class PeppinaCard extends HTMLElement {
     };
     this.picker = new ProgramPicker(root, (option) =>
       this._call("select", "select_option", "select", { option }));
+    viewportProbe(root);
     for (const role of ["settemp", "setspin"]) {
       this.$[role].addEventListener("change", (e) =>
         this._call("select", "select_option", role, { option: e.target.value }));

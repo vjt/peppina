@@ -12,6 +12,7 @@ _LOGGER = logging.getLogger(__name__)
 
 START = "startProgram"
 STOP = "stopProgram"
+STATUS_TOPIC = "/event/appliancestatus/update"
 WASHING_MACHINE = 1
 WASH_DRYER = 2
 DEFAULT_NAMES = {WASHING_MACHINE: "Washing Machine", WASH_DRYER: "Wash Dryer"}
@@ -156,6 +157,49 @@ class Appliance:
         if not parameters:
             _LOGGER.warning("%s: no parameters in the context: %s", self.name, self.context)
         self.parameters = {key: value.get("parNewVal") for key, value in parameters.items()}
+
+    @property
+    def topics(self) -> list[str]:
+        """Push topics hOn lets this appliance's owner subscribe to."""
+        return list((self.info.get("topics") or {}).get("subscribe") or [])
+
+    @property
+    def status_topic(self) -> str | None:
+        return next((t for t in self.topics if t.endswith(STATUS_TOPIC)), None)
+
+    def load_event(self, topic: str, payload: dict) -> bool:
+        """Apply one push message.
+
+        False when the whole context is worth fetching: an earlier message
+        went missing, or the mode changed and with it, maybe, the program,
+        which only the context carries.
+        """
+        if topic.endswith(STATUS_TOPIC):
+            # Status events carry only the changes, each with the value it
+            # replaces: a mismatch means our copy is stale.
+            complete = True
+            for change in payload.get("parameters") or []:
+                key = change.get("parName")
+                if key is None:
+                    continue
+                if key in self.parameters and self.parameters[key] != change.get("parOldVal"):
+                    complete = False
+                if key == "machMode":
+                    complete = False
+                self.parameters[key] = change.get("parNewVal")
+            return complete
+        for category in ("disconnected", "connected"):
+            if f"/presence/{category}/" in topic:
+                # AWS presence events can arrive out of order.
+                last = (self.context.get("lastConnEvent") or {}).get("timestampEvent")
+                when = payload.get("timestamp")
+                if not (isinstance(when, int) and isinstance(last, int) and when < last):
+                    self.context["lastConnEvent"] = {
+                        "category": category.upper(),
+                        "timestampEvent": when,
+                    }
+                return True
+        return True
 
     @property
     def is_washer(self) -> bool:

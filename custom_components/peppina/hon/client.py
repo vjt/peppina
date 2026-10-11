@@ -1,4 +1,5 @@
-"""hOn cloud client: CIAM login, appliance list, commands, context, send.
+"""hOn cloud client: CIAM login, appliance list, commands, context, send,
+and the public dictionary of program names.
 
 Protocol ported from gvigroux/hon 0.8.4 (MIT, https://github.com/gvigroux/hon).
 Unlike upstream it runs on a session handed in by the caller and keeps TLS
@@ -6,8 +7,10 @@ verification on.
 """
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
+import json
 import logging
 import secrets
 import time
@@ -30,6 +33,8 @@ USER_AGENT = (
 )
 # CIAM tokens live ~15 minutes: log in again well before that, like upstream.
 SESSION_TIMEOUT = 600
+# Public key of hOn's configuration endpoints, as in the hOn app and pyhOn.
+CONFIG_API_KEY = "GRCqFhC6Gk@ikWXm1RmnSmX1cm,MxY-configuration"
 
 
 class HonError(Exception):
@@ -113,6 +118,29 @@ class HonClient:
         if not signature:
             raise HonError("no tokenSigned from /auth/v1/introspection")
         return self._tokens["id-token"], signature
+
+    async def dictionary_version(self, language: str) -> tuple[int, str] | None:
+        """(version, url) of hOn's dictionary for a language, None if hOn gives none.
+
+        For a language it lacks hOn answers with English (measured 2026-10-11).
+        Anonymous, like the dictionary itself: no login needed.
+        """
+        body = {"languageCode": language, "beta": True, "appVersion": APP_VERSION, "os": OS}
+        headers = {"User-Agent": USER_AGENT, "x-api-key": CONFIG_API_KEY}
+        async with self._session.post(f"{API_URL}/app-config", json=body, headers=headers) as resp:
+            resp.raise_for_status()
+            data = await resp.json(content_type=None)
+        found = ((data or {}).get("payload") or {}).get("language") or {}
+        if not found.get("jsonPath"):
+            return None
+        return int(found.get("version") or 0), found["jsonPath"]
+
+    async def dictionary(self, url: str) -> dict:
+        """hOn's dictionary, several MB: parsed off the event loop."""
+        async with self._session.get(url, headers={"User-Agent": USER_AGENT}) as resp:
+            resp.raise_for_status()
+            raw = await resp.read()
+        return await asyncio.get_running_loop().run_in_executor(None, json.loads, raw)
 
     async def appliances(self) -> list[dict]:
         data = await self._request(

@@ -1,5 +1,6 @@
 """Client error paths that must not leak the credentials."""
 import asyncio
+import json
 
 import aiohttp
 import pytest
@@ -35,3 +36,61 @@ def test_login_errors_keep_the_password_out():
         asyncio.run(client.login())
     assert "hunter2" not in str(raised.value)
     assert raised.value.__cause__ is None and raised.value.__suppress_context__
+
+
+class Answer:
+    def __init__(self, data):
+        self.data = data
+        self.status = 200
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    def raise_for_status(self):
+        pass
+
+    async def json(self, content_type="application/json"):
+        return self.data
+
+    async def read(self):
+        return json.dumps(self.data).encode()
+
+
+class ConfigSession:
+    """hOn's anonymous configuration endpoint and the CDN behind it."""
+
+    def __init__(self, language):
+        self.language = language
+        self.calls = []
+
+    def post(self, url, json, headers):
+        self.calls.append((url, json, headers))
+        found = {"version": 4368, "jsonPath": URL} if json["languageCode"] == self.language else {}
+        return Answer({"payload": {"language": found}})
+
+    def get(self, url, headers):
+        self.calls.append((url, None, headers))
+        return Answer({"PROGRAMS": {"WM_WD": {"HQD_COTTONS": "Cotone"}}})
+
+
+URL = "https://assets.he-cdn.services/languages/language-it-4368.json"
+
+
+def test_dictionary_version():
+    session = ConfigSession("it")
+    client = HonClient(session, "user@example.com", "hunter2")
+    assert asyncio.run(client.dictionary_version("it")) == (4368, URL)
+    url, body, headers = session.calls[0]
+    assert url.endswith("/app-config")
+    assert body["languageCode"] == "it"
+    assert headers["x-api-key"].endswith("-configuration")
+    assert asyncio.run(client.dictionary_version("xx")) is None
+
+
+def test_dictionary():
+    client = HonClient(ConfigSession("it"), "user@example.com", "hunter2")
+    data = asyncio.run(client.dictionary(URL))
+    assert data["PROGRAMS"]["WM_WD"]["HQD_COTTONS"] == "Cotone"

@@ -26,10 +26,11 @@ function mount({ withPrograms = true, state = "hqd_smart", options, url, viewpor
     "select.p": { state, attributes: { options: options || programs.map((p) => p.key), ...(withPrograms ? { programs } : {}) } },
     "sensor.program": { state: "No program", attributes: {} },
     "sensor.end": { state: "unknown", attributes: {} },
+    "datetime.d": { state: "unknown", attributes: {} },
   };
   const card = window.document.createElement("peppina-card");
   card.setConfig({ entities: { status: "binary_sensor.s", mode: "sensor.m", remote: "binary_sensor.r", select: "select.p",
-    program: "sensor.program", end: "sensor.end" } });
+    program: "sensor.program", end: "sensor.end", delayed: "datetime.d" } });
   window.document.body.appendChild(card);
   const hass = () => ({ states: { ...states }, callService: (d, s, data) => calls.push([d, s, data]) });
   card.hass = hass();
@@ -245,6 +246,73 @@ test("a row picks with Enter too", () => {
   const row = t.$('.prow[data-key="hqd_cottons"]');
   row.dispatchEvent(new t.window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
   assert.equal(JSON.parse(JSON.stringify(t.calls))[0][2].option, "hqd_cottons");
+});
+
+const hhmm = (d) => d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+const pad = (n) => String(n).padStart(2, "0");
+const typed = (t, date) => {
+  t.$(".when").value = `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  t.$(".when").dispatchEvent(new t.window.Event("input"));
+};
+const inMinutes = (n) => { const d = new Date(Date.now() + n * 60000); d.setSeconds(0, 0); return d; };
+
+test("the schedule row: a label on both columns", () => {
+  const t = mount();
+  assert.equal(t.$(".wlabel").textContent, "Avvio alle");
+  assert.equal(t.$(".other").textContent, "\u00a0");
+  assert.equal(t.$(".sched").children.length, 2);
+});
+
+test("Avvia alle: says when it ends, from the program's duration", () => {
+  const t = mount();  // Smart A.I.: 81 minutes
+  const start = inMinutes(120);
+  typed(t, start);
+  assert.equal(t.$(".other").textContent, `Fine ≈ ${hhmm(new Date(start.getTime() + 81 * 60000))}`);
+  t.$(".schedule").click();
+  const call = JSON.parse(JSON.stringify(t.calls)).pop();
+  assert.equal(call[1], "set_value");
+  assert.equal(new Date(call[2].datetime).getTime(), start.getTime());
+});
+
+test("Finisci alle: starts the program's duration before", () => {
+  const t = mount();
+  t.$('.smode[data-mode="end"]').click();
+  assert.equal(t.$(".wlabel").textContent, "Fine alle");
+  const end = inMinutes(300);
+  typed(t, end);
+  const start = new Date(end.getTime() - 81 * 60000);
+  assert.equal(t.$(".other").textContent, `Avvio alle ${hhmm(start)}`);
+  assert.equal(t.$(".schedule").disabled, false);
+  t.$(".schedule").click();
+  const call = JSON.parse(JSON.stringify(t.calls)).pop();
+  assert.equal(new Date(call[2].datetime).getTime(), start.getTime());
+  assert.equal(t.window.localStorage.getItem("peppina-schedule-mode"), "end");
+});
+
+test("Finisci alle: no duration, or too soon, no schedule", () => {
+  const t = mount({ state: "hqd_cottons" });  // never estimated
+  t.$('.smode[data-mode="end"]').click();
+  typed(t, inMinutes(300));
+  assert.equal(t.$(".other").textContent, "Durata non nota");
+  assert.equal(t.$(".schedule").disabled, true);
+  const smart = mount();
+  smart.$('.smode[data-mode="end"]').click();
+  typed(smart, inMinutes(30));  // 81 minutes do not fit
+  assert.equal(smart.$(".other").textContent, "Troppo presto");
+  assert.equal(smart.$(".schedule").disabled, true);
+});
+
+test("a real duration wins over the estimate", () => {
+  const real = programs.map((p) => p.key === "hqd_smart"
+    ? { ...p, duration: { ...p.duration, actual: 90 } } : p);
+  const t = mount();
+  t.states["select.p"] = { ...t.states["select.p"], attributes: { ...t.states["select.p"].attributes, programs: real } };
+  t.card.hass = t.hass();
+  assert.ok(t.$$(".pchips .chip").some((c) => c.textContent === "≈ 1 h 30 min"));
+  assert.match(t.$(".pnote").textContent, /^Durata dell'ultimo lavaggio/);
+  const start = inMinutes(60);
+  typed(t, start);
+  assert.equal(t.$(".other").textContent, `Fine ≈ ${hhmm(new Date(start.getTime() + 90 * 60000))}`);
 });
 
 test("without the programs attribute it falls back to the keys", () => {

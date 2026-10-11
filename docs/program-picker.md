@@ -183,6 +183,30 @@ app on iPhone.
   `svh` and `lvh` in pixels, and the viewport meta, live, keyboard up or
   down.
 
+## Start at / finish at (added after 0.5.0)
+
+- **The row:** a choice, "Avvia alle" or "Finisci alle", remembered on the
+  device. Then the time field, and a second column whose label tells the
+  other time: "Fine ≈ 15:21", or "Avvio alle 16:39". Both columns carry a
+  label and sit level; the time field no longer spills over the button on
+  iOS (`min-width: 0`, no native appearance).
+- **The arithmetic:** with "Finisci alle" the start is the end minus the
+  program's duration. A program with no duration known shows "Durata non
+  nota"; an end too close for the duration shows "Troppo presto". Both
+  disable the button. Peppina still sends the start itself at that moment.
+- **The duration:** the real one of the program's last cycle when known,
+  else the machine's estimate. Peppina keeps the real one at the end of
+  each cycle (from hOn's activity start to the end the washer reports), and
+  at setup from `retrieve-last-activity` (activityStarted to activityEnded).
+  The chip and its line say which one it is.
+- **hOn's app does the same**, judging by its dictionary
+  (`WASHING_CMD&CTRL.SCHEDULE_CYCLE`): "Inizia alle" / "Finisce alle",
+  "Durata %{duration}", "Inizio alle %{start} fine alle %{end}", within 24
+  hours. It warns that the times "potrebbero subire variazioni a seconda
+  del carico reale". Not measured: whether its delayTime counts to the start
+  or to the end. Every start in hOn's history has delayTime 0, and finding
+  out means scheduling a real wash. Peppina does not use delayTime.
+
 ## Not in this change
 - **The card in other languages**: program names, descriptions and groups
   already follow Home Assistant's language, through the dictionary. The rest

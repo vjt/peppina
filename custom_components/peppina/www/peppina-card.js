@@ -28,6 +28,151 @@ const prettyProgram = (p) =>
 
 const hhmm = (d) => d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
 
+// What the program picker says, in one place: the rest of the card still
+// speaks Italian inline, until it learns other languages.
+const STRINGS = {
+  search: "Cerca programma",
+  close: "Chiudi",
+  mostUsed: "Più usati",
+  others: "Altri",
+  noMatch: "Nessun programma trovato",
+  tags: { guided: "guidato", care: "cura capi", download: "scaricato", featured: "in evidenza" },
+  load: (kg) => `max ${kg.toLocaleString("it-IT")} kg`,
+  temp: ([lo, hi]) => {
+    const cold = "freddo";
+    if (lo === hi) return lo === 0 ? cold : `${lo}°C`;
+    return `${lo === 0 ? cold : lo}–${hi}°C`;
+  },
+  spin: (rpm) => `${rpm} giri`,
+  times: (n) => `${n}×`,
+};
+const MOST_USED = 5;
+
+const el = (tag, cls, text) => {
+  const node = document.createElement(tag);
+  if (cls) node.className = cls;
+  if (text !== undefined) node.textContent = text;
+  return node;
+};
+const fold = (text) => text.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
+const tagged = (p) => (p.tag ? `${p.name} · ${STRINGS.tags[p.tag] || p.tag}` : p.name);
+const facts = (p) => [
+  p.load && STRINGS.load(p.load),
+  p.temp && STRINGS.temp(p.temp),
+  p.spin && STRINGS.spin(p.spin),
+].filter(Boolean);
+
+// The program field and its sheet: search, the most used first, then hOn's
+// groups in the order the integration sorted them. Plain DOM in the card's
+// shadow root; texts only ever go through textContent.
+class ProgramPicker {
+  constructor(root, onPick) {
+    const $ = (sel) => root.querySelector(sel);
+    this.$ = {
+      box: $(".programbox"), field: $(".field"), name: $(".pname"), desc: $(".pdesc"),
+      chips: $(".pchips"), sheet: $(".sheet"), search: $(".search"), list: $(".list"),
+    };
+    this._onPick = onPick;
+    this._programs = [];
+    this._onKey = (e) => e.key === "Escape" && this.close();
+    this.$.field.addEventListener("click", () => this.open());
+    $(".close").addEventListener("click", () => this.close());
+    $(".backdrop").addEventListener("click", () => this.close());
+    this.$.search.addEventListener("input", () => {
+      this.$.list.scrollTop = 0;
+      this._render();
+    });
+    this.$.list.addEventListener("click", (e) => {
+      const row = e.target.closest(".prow");
+      if (!row) return;
+      this.close();
+      if (row.dataset.key !== this._value) this._onPick(row.dataset.key);
+    });
+  }
+
+  // sel: the program select's state, a new object whenever it changes.
+  update(sel) {
+    this.$.box.classList.toggle("hidden", !sel);
+    if (!sel || sel === this._sel) return;
+    this._sel = sel;
+    // Unavailable, the state has lost its attributes: keep what was shown.
+    if (["unavailable", "unknown"].includes(sel.state)) {
+      this.$.field.disabled = true;
+      this.close();
+      return;
+    }
+    const options = sel.attributes.options || [];
+    this._programs = sel.attributes.programs
+      || options.map((key) => ({ key, name: prettyProgram(key), description: "", usage: 0 }));
+    this._value = sel.state;
+    this.$.field.disabled = options.length < 2;
+    const p = this._programs.find((x) => x.key === sel.state);
+    this.$.name.textContent = p ? tagged(p) : prettyProgram(sel.state || "");
+    this.$.desc.textContent = (p && p.description) || "";
+    this.$.chips.replaceChildren(...(p ? facts(p) : []).map((t) => el("span", "chip", t)));
+    if (this.isOpen) this._render();
+  }
+
+  get isOpen() {
+    return !this.$.sheet.classList.contains("hidden");
+  }
+
+  open() {
+    this.$.search.value = "";
+    this.$.sheet.classList.remove("hidden");
+    document.addEventListener("keydown", this._onKey);
+    this.$.list.scrollTop = 0;
+    this._render();
+    const sel = this.$.list.querySelector(".prow.sel");
+    if (sel && sel.scrollIntoView) sel.scrollIntoView({ block: "nearest" });
+    if (window.matchMedia && matchMedia("(pointer: fine)").matches) this.$.search.focus();
+  }
+
+  close() {
+    if (!this.isOpen) return;
+    this.$.sheet.classList.add("hidden");
+    document.removeEventListener("keydown", this._onKey);
+    this.$.field.focus({ preventScroll: true });
+  }
+
+  _render() {
+    const query = fold(this.$.search.value.trim());
+    const shown = query
+      ? this._programs.filter((p) =>
+        fold(`${p.name} ${p.description} ${p.group_name || ""}`).includes(query))
+      : this._programs;
+    const nodes = [];
+    // Searching, the groups say enough: the most used would repeat them.
+    const top = query ? [] : shown.filter((p) => p.usage > 0)
+      .sort((a, b) => b.usage - a.usage).slice(0, MOST_USED);
+    if (top.length) nodes.push(el("div", "group", STRINGS.mostUsed), ...top.map((p) => this._row(p)));
+    let group;
+    for (const p of shown) {
+      const name = p.group_name || STRINGS.others;
+      if (name !== group) nodes.push(el("div", "group", (group = name)));
+      nodes.push(this._row(p));
+    }
+    if (!shown.length) nodes.push(el("div", "empty", STRINGS.noMatch));
+    const scroll = this.$.list.scrollTop;
+    this.$.list.replaceChildren(...nodes);
+    this.$.list.scrollTop = scroll;
+  }
+
+  _row(p) {
+    const row = el("button", p.key === this._value ? "prow sel" : "prow");
+    row.type = "button";
+    row.dataset.key = p.key;
+    const head = el("span", "ptop");
+    head.append(el("span", "pn", p.name));
+    if (p.tag) head.append(el("span", "ptag", STRINGS.tags[p.tag] || p.tag));
+    const meta = p.usage > 0 ? STRINGS.times(p.usage) : p.load ? STRINGS.load(p.load) : "";
+    if (meta) head.append(el("span", "pmeta", meta));
+    row.append(head);
+    if (p.description) row.append(el("span", "pd", p.description));
+    return row;
+  }
+}
+
 const STYLE = `
   :host { display: block; height: 100%; }
   .wrap {
@@ -140,6 +285,71 @@ const STYLE = `
   button:disabled { opacity: 0.4; cursor: default; }
   button.go { background: var(--primary-color, #03a9f4); color: var(--text-primary-color, #fff); }
   button.stop { background: var(--error-color, #db4437); color: #fff; }
+
+  .field {
+    width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    text-align: left; font-weight: normal; padding: 10px 12px; border-radius: 12px;
+    border: 1px solid var(--divider-color, #ccc);
+    background: var(--primary-background-color); color: var(--primary-text-color);
+  }
+  .field .caret { opacity: 0.6; }
+  .pdesc {
+    font-size: 0.85em; opacity: 0.75; margin-top: 6px; line-height: 1.35;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .pdesc:empty { display: none; }
+  .pchips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+  .pchips .chip { padding: 3px 9px; font-size: 0.8em; }
+  .sheet {
+    position: fixed; inset: 0; z-index: 10;
+    display: flex; align-items: flex-end; justify-content: center;
+  }
+  .sheet .backdrop {
+    position: absolute; inset: 0; background: rgba(0, 0, 0, 0.45); touch-action: none;
+  }
+  .sheetbox {
+    position: relative; width: min(100%, 560px); max-height: 85vh; max-height: 85dvh;
+    box-sizing: border-box;
+    display: flex; flex-direction: column;
+    background: var(--card-background-color, #fff); color: var(--primary-text-color);
+    border-radius: 20px 20px 0 0; box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.25);
+    padding-bottom: env(safe-area-inset-bottom);
+    font-family: var(--paper-font-body1_-_font-family, system-ui, sans-serif);
+  }
+  .sheethead { display: flex; gap: 8px; padding: 12px; touch-action: none; }
+  .sheethead .search {
+    flex: 1; min-width: 0; box-sizing: border-box; font: inherit; font-size: 1em;
+    padding: 10px 12px; border-radius: 12px; border: 1px solid var(--divider-color, #ccc);
+    background: var(--primary-background-color); color: var(--primary-text-color);
+  }
+  .sheethead .close { padding: 10px 14px; }
+  .list { overflow-y: auto; overscroll-behavior: contain; padding: 0 8px 12px; }
+  .group {
+    font-size: 0.72em; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    opacity: 0.55; padding: 14px 10px 4px;
+  }
+  .prow {
+    display: block; width: 100%; text-align: left; font-weight: normal;
+    background: none; border-radius: 12px; padding: 9px 10px;
+  }
+  .prow:hover { background: var(--secondary-background-color, #eee); }
+  .prow.sel { background: rgba(3, 169, 244, 0.14); }
+  .ptop { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+  .pn { font-weight: 600; }
+  .ptag {
+    font-size: 0.72em; padding: 1px 7px; border-radius: 999px; white-space: nowrap;
+    background: var(--secondary-background-color, #eee);
+  }
+  .pmeta { margin-left: auto; font-size: 0.8em; opacity: 0.6; white-space: nowrap; }
+  .pd {
+    display: block; font-size: 0.82em; opacity: 0.65; margin-top: 2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .empty { padding: 24px; text-align: center; opacity: 0.6; }
+  @media (min-width: 700px) {
+    .sheet { align-items: center; }
+    .sheetbox { border-radius: 20px; max-height: 80vh; max-height: 80dvh; }
+  }
   .hidden { display: none !important; }
   .side { display: flex; flex-direction: column; align-items: center; gap: 20px;
           width: min(100%, 560px); }
@@ -304,7 +514,12 @@ class PeppinaCard extends HTMLElement {
         <div class="panel">
           <div class="chips"></div>
           <div class="row">
-            <div><label>Programma</label><select class="program"></select></div>
+            <div class="programbox">
+              <label>Programma</label>
+              <button class="field" type="button"><span class="pname"></span><span class="caret">▾</span></button>
+              <div class="pdesc"></div>
+              <div class="pchips"></div>
+            </div>
           </div>
           <div class="row">
             <div><label>Temperatura</label><select class="settemp"></select></div>
@@ -325,17 +540,27 @@ class PeppinaCard extends HTMLElement {
           </div>
         </div>
         </div>
+      </div>
+      <div class="sheet hidden" role="dialog" aria-modal="true" aria-label="Programma">
+        <div class="backdrop"></div>
+        <div class="sheetbox">
+          <div class="sheethead">
+            <input class="search" type="search" autocomplete="off" placeholder="${STRINGS.search}">
+            <button class="close" type="button" aria-label="${STRINGS.close}">✕</button>
+          </div>
+          <div class="list"></div>
+        </div>
       </div>`;
     const $ = (sel) => root.querySelector(sel);
     this.$ = {
       wrap: $(".wrap"), lcd: $(".lcd"), big: $(".big"), small: $(".small"),
-      chips: $(".chips"), program: $(".program"), start: $(".start"),
+      chips: $(".chips"), start: $(".start"),
       settemp: $(".settemp"), setspin: $(".setspin"),
       auto: $(".auto"), autostate: $(".autostate"), autotoggle: $(".autotoggle"),
       stop: $(".stop"), when: $(".when"), schedule: $(".schedule"), cancel: $(".cancel"),
     };
-    this.$.program.addEventListener("change", (e) =>
-      this._call("select", "select_option", "select", { option: e.target.value }));
+    this.picker = new ProgramPicker(root, (option) =>
+      this._call("select", "select_option", "select", { option }));
     for (const role of ["settemp", "setspin"]) {
       this.$[role].addEventListener("change", (e) =>
         this._call("select", "select_option", role, { option: e.target.value }));
@@ -436,7 +661,7 @@ class PeppinaCard extends HTMLElement {
       this.$.chips.appendChild(c);
     }
 
-    this._fillSelect("select", this.$.program, prettyProgram);
+    this.picker.update(this._state("select"));
     this._fillSelect("settemp", this.$.settemp, (v) => (v === "0" ? "Freddo" : `${v}°C`));
     this._fillSelect("setspin", this.$.setspin, (v) => (v === "0" ? "Niente" : `${v} giri`));
 

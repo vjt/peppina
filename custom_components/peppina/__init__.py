@@ -23,7 +23,9 @@ from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
+from .catalog import Usage, async_texts
 from .hon import Appliance, Command, HonAuthError, HonClient, HonError
+from .hon.programs import describe, dictionary_keys
 from .hon.push import HonPush
 
 _LOGGER = logging.getLogger(__name__)
@@ -39,6 +41,7 @@ PLATFORMS = [
 UPDATE_INTERVAL = timedelta(seconds=60)
 # While the push is up, polling only guards against a push that went quiet.
 PUSH_UPDATE_INTERVAL = timedelta(minutes=10)
+USAGE = f"{DOMAIN}_usage"
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -47,6 +50,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     from .dashboard import async_setup_dashboard
 
     await async_setup_dashboard(hass)
+    usage = Usage(hass)
+    await usage.async_load()
+    hass.data[USAGE] = usage
     return True
 
 
@@ -60,7 +66,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             appliance = Appliance(info)
             appliance.load_commands(await client.commands(info))
             if appliance.is_washer:
-                washers.append(Washer(hass, entry, client, appliance))
+                washers.append(Washer(hass, entry, client, appliance, hass.data[USAGE]))
     except HonAuthError as err:
         raise ConfigEntryError(f"hOn refused the credentials: {err}") from err
     except (aiohttp.ClientError, TimeoutError, HonError) as err:
@@ -72,6 +78,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = washers
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     _start_push(hass, entry, client, washers)
+    if washers:
+        entry.async_create_background_task(
+            hass, _load_texts(hass, client, washers), f"{DOMAIN} texts"
+        )
 
     from .dashboard import async_save_dashboard
 
@@ -100,6 +110,15 @@ def _start_push(
     entry.async_create_background_task(hass, push.run(), f"{DOMAIN} push")
 
 
+async def _load_texts(hass: HomeAssistant, client: HonClient, washers: list[Washer]) -> None:
+    """Program names and descriptions, in the background: the card makes do
+    with the program keys until they land."""
+    keys = sorted({key for washer in washers for key in dictionary_keys(washer.appliance)})
+    texts = await async_texts(hass, client, keys)
+    for washer in washers:
+        washer.set_texts(texts)
+
+
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         return False
@@ -118,11 +137,19 @@ class Washer:
     """One hOn appliance: its client, its poller and the Peppina-side state."""
 
     def __init__(
-        self, hass: HomeAssistant, entry: ConfigEntry, client: HonClient, appliance: Appliance
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        client: HonClient,
+        appliance: Appliance,
+        usage: Usage,
     ) -> None:
         self.hass = hass
         self.client = client
         self.appliance = appliance
+        self.usage = usage
+        # Program names and descriptions from hOn's dictionary, {} until loaded.
+        self.texts: dict[str, str] = {}
         self.mac = appliance.mac
         self.name = appliance.name
         info = appliance.info
@@ -190,6 +217,14 @@ class Washer:
     def programs(self) -> list[str]:
         return self.appliance.programs
 
+    def program_list(self) -> list[dict]:
+        """Every program as the card shows it: name, group, load, usage."""
+        return describe(self.appliance, self.texts, self.usage.counts(self.mac))
+
+    def set_texts(self, texts: dict[str, str]) -> None:
+        self.texts = texts
+        self._notify()
+
     def select_program(self, program: str) -> None:
         if program != self.program:
             self.program = program
@@ -222,10 +257,14 @@ class Washer:
         await self._send(
             self.appliance.start_command(program), f"start of {program}", self.settings
         )
+        self.usage.count(self.mac, program)
+        self._notify()
+        await self.coordinator.async_request_refresh()
 
     async def stop(self) -> None:
         self.cancel_delayed_start()
         await self._send(self.appliance.stop_command(), "stop")
+        await self.coordinator.async_request_refresh()
 
     async def _send(self, command: Command, what: str, settings: dict | None = None) -> None:
         try:
@@ -234,7 +273,6 @@ class Washer:
             raise HomeAssistantError(f"{self.name}: {what} failed: {err}") from err
         if not accepted:
             raise HomeAssistantError(f"{self.name}: hOn rejected {what}")
-        await self.coordinator.async_request_refresh()
 
     def schedule_start(self, when: datetime) -> None:
         self.cancel_delayed_start()
@@ -266,4 +304,7 @@ class Washer:
 
     def _notify(self) -> None:
         for listener in list(self._listeners):
-            listener()
+            try:
+                listener()
+            except Exception:  # one broken entity must not hold up a stop
+                _LOGGER.exception("%s: updating an entity failed", self.name)

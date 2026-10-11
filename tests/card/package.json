@@ -1,0 +1,7 @@
+{
+  "private": true,
+  "description": "Peppina card tests in jsdom: npm install && npm test",
+  "type": "module",
+  "scripts": { "test": "node picker.test.mjs" },
+  "devDependencies": { "jsdom": "^26.1.0" }
+}

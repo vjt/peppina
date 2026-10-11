@@ -24,6 +24,8 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
 class PeppinaProgram(PeppinaEntity, SelectEntity, RestoreEntity):
     _attr_icon = "mdi:washing-machine"
+    # Names and descriptions of every program, ~30 KB: past the recorder's limit.
+    _unrecorded_attributes = frozenset({"programs"})
 
     def __init__(self, washer) -> None:
         super().__init__(washer, "program", "Programma")
@@ -35,6 +37,10 @@ class PeppinaProgram(PeppinaEntity, SelectEntity, RestoreEntity):
     @property
     def current_option(self) -> str | None:
         return self._washer.program
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {"programs": self._washer.program_list()}
 
     async def async_select_option(self, option: str) -> None:
         self._washer.select_program(option)

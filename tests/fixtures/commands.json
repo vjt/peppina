@@ -1,0 +1,912 @@
+{
+ "applianceModel": {
+  "options": {}
+ },
+ "startProgram": {
+  "PROGRAMS.WM_WD.HQD_SMART": {
+   "description": "Thanks to Artificial Intelligence, this program automatically adapts the washing parameters and times. At the end you can consult a report with the savings and the results obtained. Recommended for cotton, synthetic and blends, normally soiled.",
+   "parameters": {
+    "temp": {
+     "category": "command",
+     "typology": "enum",
+     "mandatory": 1,
+     "defaultValue": "30",
+     "enumValues": [
+      0,
+      20,
+      30,
+      40,
+      60
+     ]
+    },
+    "spinSpeed": {
+     "category": "command",
+     "typology": "enum",
+     "mandatory": 1,
+     "defaultValue": "1000",
+     "enumValues": [
+      0,
+      400,
+      600,
+      800,
+      1000,
+      1200
+     ]
+    },
+    "prCode": {
+     "category": "command",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": "124"
+    }
+   },
+   "ancillaryParameters": {
+    "programCluster": {
+     "category": "cluster",
+     "typology": "enum",
+     "mandatory": 1,
+     "enumValues": [
+      "eco",
+      "traditional"
+     ],
+     "defaultValue": "[eco|traditional]"
+    },
+    "programFamily": {
+     "category": "cluster",
+     "typology": "enum",
+     "mandatory": 1,
+     "enumValues": [
+      "dashboard",
+      "hidden",
+      "smart"
+     ],
+     "defaultValue": "[dashboard|hidden|smart]"
+    },
+    "prPosition": {
+     "category": "general",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": "1"
+    },
+    "remoteVisible": {
+     "category": "general",
+     "typology": "fixed",
+     "mandatory": 0,
+     "fixedValue": "1"
+    },
+    "suggestedLoadW": {
+     "category": "general",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": 9,
+     "suggestedValue": 9
+    }
+   }
+  },
+  "PROGRAMS.WM_WD.HQD_QUICK_15": {
+   "description": "A complete super-rapid cycle (wash, rinse, and spin), suitable for slightly dirty cottons and mixed fabrics.",
+   "parameters": {
+    "temp": {
+     "category": "command",
+     "typology": "enum",
+     "mandatory": 1,
+     "defaultValue": "0",
+     "enumValues": [
+      0,
+      20,
+      30,
+      40
+     ]
+    },
+    "spinSpeed": {
+     "category": "command",
+     "typology": "enum",
+     "mandatory": 1,
+     "defaultValue": "1000",
+     "enumValues": [
+      0,
+      400,
+      600,
+      800,
+      1000,
+      1200,
+      1400
+     ]
+    },
+    "prCode": {
+     "category": "command",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": "72"
+    }
+   },
+   "ancillaryParameters": {
+    "programCluster": {
+     "category": "cluster",
+     "typology": "enum",
+     "mandatory": 1,
+     "enumValues": [
+      "quick",
+      "eco",
+      "traditional"
+     ],
+     "defaultValue": "[quick|eco|traditional]"
+    },
+    "programFamily": {
+     "category": "cluster",
+     "typology": "enum",
+     "mandatory": 1,
+     "enumValues": [
+      "dashboard"
+     ],
+     "defaultValue": "[dashboard]"
+    },
+    "prPosition": {
+     "category": "general",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": "2"
+    },
+    "remoteVisible": {
+     "category": "general",
+     "typology": "fixed",
+     "mandatory": 0,
+     "fixedValue": "1"
+    },
+    "suggestedLoadW": {
+     "category": "general",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": 1.8,
+     "suggestedValue": 1.8
+    }
+   }
+  },
+  "PROGRAMS.WM_WD.IOT_WASH_RAPID_14": {
+   "description": "A complete super-rapid cycle (wash, rinse, and spin), suitable for slightly dirty cottons and mixed fabrics.",
+   "parameters": {
+    "temp": {
+     "category": "command",
+     "typology": "enum",
+     "mandatory": 1,
+     "defaultValue": "0",
+     "enumValues": [
+      0,
+      20,
+      30,
+      40
+     ]
+    },
+    "spinSpeed": {
+     "category": "command",
+     "typology": "enum",
+     "mandatory": 1,
+     "defaultValue": "1000",
+     "enumValues": [
+      0,
+      400,
+      600,
+      800,
+      1000,
+      1200,
+      1400
+     ]
+    },
+    "prCode": {
+     "category": "command",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": "72"
+    }
+   },
+   "ancillaryParameters": {
+    "programCluster": {
+     "category": "cluster",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": "quick"
+    },
+    "programFamily": {
+     "category": "cluster",
+     "typology": "enum",
+     "mandatory": 1,
+     "enumValues": [
+      "guided",
+      "voice"
+     ],
+     "defaultValue": "[guided|voice]"
+    },
+    "prPosition": {
+     "category": "general",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": "2"
+    },
+    "remoteVisible": {
+     "category": "general",
+     "typology": "fixed",
+     "mandatory": 0,
+     "fixedValue": "0"
+    },
+    "suggestedLoadW": {
+     "category": "general",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": 1.8,
+     "suggestedValue": 1.8
+    }
+   }
+  },
+  "PROGRAMS.WM_WD.HQD_COTTONS": {
+   "description": "Cycle designed to develop the maximum degree of washing for cotton garments, even when fully loaded. Final spin at maximum speed (adjustable).",
+   "parameters": {
+    "temp": {
+     "category": "command",
+     "typology": "enum",
+     "mandatory": 1,
+     "defaultValue": "40",
+     "enumValues": [
+      0,
+      20,
+      30,
+      40,
+      60,
+      90
+     ]
+    },
+    "spinSpeed": {
+     "category": "command",
+     "typology": "enum",
+     "mandatory": 1,
+     "defaultValue": "1400",
+     "enumValues": [
+      0,
+      400,
+      600,
+      800,
+      1000,
+      1200,
+      1400
+     ]
+    },
+    "prCode": {
+     "category": "command",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": "115"
+    }
+   },
+   "ancillaryParameters": {
+    "programCluster": {
+     "category": "cluster",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": "traditional"
+    },
+    "programFamily": {
+     "category": "cluster",
+     "typology": "enum",
+     "mandatory": 1,
+     "enumValues": [
+      "dashboard",
+      "hidden"
+     ],
+     "defaultValue": "[dashboard|hidden]"
+    },
+    "prPosition": {
+     "category": "general",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": "7"
+    },
+    "remoteVisible": {
+     "category": "general",
+     "typology": "fixed",
+     "mandatory": 0,
+     "fixedValue": "1"
+    },
+    "suggestedLoadW": {
+     "category": "general",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": 9,
+     "suggestedValue": 9
+    }
+   }
+  },
+  "PROGRAMS.WM_WD.IOT_WASH_COTTON": {
+   "description": "Cycle designed to develop the maximum degree of washing for cotton garments, even when fully loaded. Final spin at maximum speed (adjustable).",
+   "parameters": {
+    "temp": {
+     "category": "command",
+     "typology": "enum",
+     "mandatory": 1,
+     "defaultValue": "40",
+     "enumValues": [
+      0,
+      20,
+      30,
+      40,
+      60,
+      90
+     ]
+    },
+    "spinSpeed": {
+     "category": "command",
+     "typology": "enum",
+     "mandatory": 1,
+     "defaultValue": "1400",
+     "enumValues": [
+      0,
+      400,
+      600,
+      800,
+      1000,
+      1200,
+      1400
+     ]
+    },
+    "prCode": {
+     "category": "command",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": "115"
+    }
+   },
+   "ancillaryParameters": {
+    "programCluster": {
+     "category": "cluster",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": "traditional"
+    },
+    "programFamily": {
+     "category": "cluster",
+     "typology": "enum",
+     "mandatory": 1,
+     "enumValues": [
+      "guided",
+      "voice"
+     ],
+     "defaultValue": "[guided|voice]"
+    },
+    "prPosition": {
+     "category": "general",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": "7"
+    },
+    "remoteVisible": {
+     "category": "general",
+     "typology": "fixed",
+     "mandatory": 0,
+     "fixedValue": "0"
+    },
+    "suggestedLoadW": {
+     "category": "general",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": 9,
+     "suggestedValue": 9
+    }
+   }
+  },
+  "PROGRAMS.WM_WD.IOT_WASH_WINE_STAINS": {
+   "description": "A cycle designed to eliminate all wine stains from resistant cotton and mixed garments.",
+   "parameters": {
+    "temp": {
+     "category": "command",
+     "typology": "enum",
+     "mandatory": 1,
+     "defaultValue": "40",
+     "enumValues": [
+      0,
+      20,
+      30,
+      40,
+      60
+     ]
+    },
+    "spinSpeed": {
+     "category": "command",
+     "typology": "enum",
+     "mandatory": 1,
+     "defaultValue": "1200",
+     "enumValues": [
+      0,
+      400,
+      600,
+      800,
+      1000,
+      1200
+     ]
+    },
+    "prCode": {
+     "category": "command",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": "116"
+    }
+   },
+   "ancillaryParameters": {
+    "programCluster": {
+     "category": "cluster",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": "stains"
+    },
+    "programFamily": {
+     "category": "cluster",
+     "typology": "enum",
+     "mandatory": 1,
+     "enumValues": [
+      "download"
+     ],
+     "defaultValue": "[download]"
+    },
+    "prPosition": {
+     "category": "general",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": "8"
+    },
+    "remoteVisible": {
+     "category": "general",
+     "typology": "fixed",
+     "mandatory": 0,
+     "fixedValue": "1"
+    },
+    "suggestedLoadW": {
+     "category": "general",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": 4.5,
+     "suggestedValue": 4.5
+    }
+   }
+  },
+  "PROGRAMS.WM_WD.HQD_SYNTHETIC_AND_COLOURED": {
+   "description": "Wash cycle designed for synthetic or mixed fabrics, with a gentle final spin that reduces the formation of wrinkles.",
+   "parameters": {
+    "temp": {
+     "category": "command",
+     "typology": "enum",
+     "mandatory": 1,
+     "defaultValue": "40",
+     "enumValues": [
+      0,
+      20,
+      30,
+      40,
+      60
+     ]
+    },
+    "spinSpeed": {
+     "category": "command",
+     "typology": "enum",
+     "mandatory": 1,
+     "defaultValue": "1200",
+     "enumValues": [
+      0,
+      400,
+      600,
+      800,
+      1000,
+      1200
+     ]
+    },
+    "prCode": {
+     "category": "command",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": "116"
+    }
+   },
+   "ancillaryParameters": {
+    "programCluster": {
+     "category": "cluster",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": "traditional"
+    },
+    "programFamily": {
+     "category": "cluster",
+     "typology": "enum",
+     "mandatory": 1,
+     "enumValues": [
+      "dashboard",
+      "hidden"
+     ],
+     "defaultValue": "[dashboard|hidden]"
+    },
+    "prPosition": {
+     "category": "general",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": "8"
+    },
+    "remoteVisible": {
+     "category": "general",
+     "typology": "fixed",
+     "mandatory": 0,
+     "fixedValue": "1"
+    },
+    "suggestedLoadW": {
+     "category": "general",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": 4.5,
+     "suggestedValue": 4.5
+    }
+   }
+  },
+  "PROGRAMS.WM_WD.IOT_WASH_COLOURED": {
+   "description": "This program allows you to wash together laundry of different colors and fabrics. Washing and rinsing are optimised in the drum rotation rhythms and in the water levels. The gentle action centrifuge ensures reduced wrinkling on the fabrics.",
+   "parameters": {
+    "temp": {
+     "category": "command",
+     "typology": "enum",
+     "mandatory": 1,
+     "defaultValue": "40",
+     "enumValues": [
+      0,
+      20,
+      30,
+      40,
+      60
+     ]
+    },
+    "spinSpeed": {
+     "category": "command",
+     "typology": "enum",
+     "mandatory": 1,
+     "defaultValue": "1200",
+     "enumValues": [
+      0,
+      400,
+      600,
+      800,
+      1000,
+      1200
+     ]
+    },
+    "prCode": {
+     "category": "command",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": "116"
+    }
+   },
+   "ancillaryParameters": {
+    "programCluster": {
+     "category": "cluster",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": "traditional"
+    },
+    "programFamily": {
+     "category": "cluster",
+     "typology": "enum",
+     "mandatory": 1,
+     "enumValues": [
+      "guided",
+      "voice"
+     ],
+     "defaultValue": "[guided|voice]"
+    },
+    "prPosition": {
+     "category": "general",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": "8"
+    },
+    "remoteVisible": {
+     "category": "general",
+     "typology": "fixed",
+     "mandatory": 0,
+     "fixedValue": "0"
+    },
+    "suggestedLoadW": {
+     "category": "general",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": 4.5,
+     "suggestedValue": 4.5
+    }
+   }
+  },
+  "PROGRAMS.WM_WD.IOT_WASH_COLORED": {
+   "description": "This cycle washes all your colored clothes (cotton and mixed), normally soiled, with the maximum care.",
+   "parameters": {
+    "temp": {
+     "category": "command",
+     "typology": "enum",
+     "mandatory": 1,
+     "defaultValue": "40",
+     "enumValues": [
+      0,
+      20,
+      30,
+      40,
+      60
+     ]
+    },
+    "spinSpeed": {
+     "category": "command",
+     "typology": "enum",
+     "mandatory": 1,
+     "defaultValue": "1200",
+     "enumValues": [
+      0,
+      400,
+      600,
+      800,
+      1000,
+      1200
+     ]
+    },
+    "prCode": {
+     "category": "command",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": "116"
+    }
+   },
+   "ancillaryParameters": {
+    "programCluster": {
+     "category": "cluster",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": "traditional"
+    },
+    "programFamily": {
+     "category": "cluster",
+     "typology": "enum",
+     "mandatory": 1,
+     "enumValues": [
+      "care"
+     ],
+     "defaultValue": "[care]"
+    },
+    "prPosition": {
+     "category": "general",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": "8"
+    },
+    "remoteVisible": {
+     "category": "general",
+     "typology": "fixed",
+     "mandatory": 0,
+     "fixedValue": "0"
+    },
+    "suggestedLoadW": {
+     "category": "general",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": 4.5,
+     "suggestedValue": 4.5
+    }
+   }
+  },
+  "PROGRAMS.WM_WD.HQD_ECO_40_60_DEGREES": {
+   "description": "The ECO 40-60 program is able to clean normally soiled cotton laundry declared to be washable at 40°C or 60°C, together in the same cycle. This program is used to assess the compliance with EU Ecodesign legislation (environmentally friendly product design).",
+   "parameters": {
+    "temp": {
+     "category": "command",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": "40"
+    },
+    "spinSpeed": {
+     "category": "command",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": "1400"
+    },
+    "prCode": {
+     "category": "command",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": "136"
+    }
+   },
+   "ancillaryParameters": {
+    "programCluster": {
+     "category": "cluster",
+     "typology": "enum",
+     "mandatory": 1,
+     "enumValues": [
+      "eco",
+      "traditional"
+     ],
+     "defaultValue": "[eco|traditional]"
+    },
+    "programFamily": {
+     "category": "cluster",
+     "typology": "enum",
+     "mandatory": 1,
+     "enumValues": [
+      "dashboard",
+      "hidden"
+     ],
+     "defaultValue": "[dashboard|hidden]"
+    },
+    "prPosition": {
+     "category": "general",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": "13"
+    },
+    "remoteVisible": {
+     "category": "general",
+     "typology": "fixed",
+     "mandatory": 0,
+     "fixedValue": "1"
+    },
+    "suggestedLoadW": {
+     "category": "general",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": 9,
+     "suggestedValue": 9
+    }
+   }
+  },
+  "PROGRAMS.WM_WD.HQD_BABYCARE": {
+   "description": "A cycle designed to take good care of baby clothes and eliminate all detergent residues",
+   "parameters": {
+    "temp": {
+     "category": "command",
+     "typology": "enum",
+     "mandatory": 1,
+     "defaultValue": "40",
+     "enumValues": [
+      0,
+      20,
+      30,
+      40,
+      60,
+      90
+     ]
+    },
+    "spinSpeed": {
+     "category": "command",
+     "typology": "enum",
+     "mandatory": 1,
+     "defaultValue": "600",
+     "enumValues": [
+      0,
+      400,
+      600,
+      800,
+      1000,
+      1200
+     ]
+    },
+    "prCode": {
+     "category": "command",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": "77"
+    }
+   },
+   "ancillaryParameters": {
+    "programFamily": {
+     "category": "cluster",
+     "typology": "enum",
+     "mandatory": 1,
+     "enumValues": [
+      "dashboard"
+     ],
+     "defaultValue": "[dashboard]"
+    },
+    "prPosition": {
+     "category": "general",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": "18"
+    },
+    "remoteVisible": {
+     "category": "general",
+     "typology": "fixed",
+     "mandatory": 0,
+     "fixedValue": "1"
+    },
+    "suggestedLoadW": {
+     "category": "general",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": 2.25,
+     "suggestedValue": 2.25
+    }
+   }
+  },
+  "PROGRAMS.WM_WD.IOT_WASH_BABY_SANITIZER": {
+   "description": "This cycle sanitises all resistant children's clothing at 60°C, without a trace of detergent.",
+   "parameters": {
+    "temp": {
+     "category": "command",
+     "typology": "enum",
+     "mandatory": 1,
+     "defaultValue": "40",
+     "enumValues": [
+      0,
+      20,
+      30,
+      40,
+      60,
+      90
+     ]
+    },
+    "spinSpeed": {
+     "category": "command",
+     "typology": "enum",
+     "mandatory": 1,
+     "defaultValue": "1000",
+     "enumValues": [
+      0,
+      400,
+      600,
+      800,
+      1000,
+      1200
+     ]
+    },
+    "prCode": {
+     "category": "command",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": "77"
+    }
+   },
+   "ancillaryParameters": {
+    "programCluster": {
+     "category": "cluster",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": "health"
+    },
+    "programFamily": {
+     "category": "cluster",
+     "typology": "enum",
+     "mandatory": 1,
+     "enumValues": [
+      "download"
+     ],
+     "defaultValue": "[download]"
+    },
+    "prPosition": {
+     "category": "general",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": "18"
+    },
+    "remoteVisible": {
+     "category": "general",
+     "typology": "fixed",
+     "mandatory": 0,
+     "fixedValue": "1"
+    },
+    "suggestedLoadW": {
+     "category": "general",
+     "typology": "fixed",
+     "mandatory": 1,
+     "fixedValue": 2.25,
+     "suggestedValue": 2.25
+    }
+   }
+  }
+ },
+ "stopProgram": {
+  "description": "The message allows to stop the program",
+  "parameters": {
+   "onOffStatus": {
+    "category": "command",
+    "typology": "fixed",
+    "mandatory": 1,
+    "fixedValue": "0"
+   }
+  }
+ }
+}

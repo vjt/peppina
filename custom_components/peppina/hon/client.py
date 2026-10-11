@@ -106,6 +106,14 @@ class HonClient:
             resp.raise_for_status()
             return await resp.json()
 
+    async def push_credentials(self) -> tuple[str, str]:
+        """(id token, its signature): what the push broker's authorizer wants."""
+        data = await self._request("GET", "/auth/v1/introspection")
+        signature = (data.get("payload") or {}).get("tokenSigned")
+        if not signature:
+            raise HonError("no tokenSigned from /auth/v1/introspection")
+        return self._tokens["id-token"], signature
+
     async def appliances(self) -> list[dict]:
         data = await self._request(
             "POST", "/unified-api/v1/view/appliance-list", json={"deviceId": "homeassistant"}

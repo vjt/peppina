@@ -1,0 +1,266 @@
+[
+ {
+  "received": "11:03:20.707",
+  "topic": "haier/things/aa-bb-cc-dd-ee-ff/event/appliancestatus/update",
+  "payload": {
+   "parameters": [
+    {
+     "parName": "currentElectricityUsed",
+     "parOldVal": "0.09",
+     "parNewVal": "0.12"
+    },
+    {
+     "parName": "remainingMainWashTime",
+     "parOldVal": "38",
+     "parNewVal": "37"
+    },
+    {
+     "parName": "totalElectricityUsed",
+     "parOldVal": "240.80",
+     "parNewVal": "240.83"
+    },
+    {
+     "parName": "remainingTimeMM",
+     "parOldVal": "74",
+     "parNewVal": "73"
+    }
+   ],
+   "macAddress": "aa-bb-cc-dd-ee-ff",
+   "applianceTypeName": "WM",
+   "eventId": "1",
+   "timestamp": "2026-10-11T09:03:20.6Z",
+   "transactionId": "aa-bb-cc-dd-ee-ff_2026-10-11T09:03:20.6Z"
+  }
+ },
+ {
+  "received": "11:04:20.273",
+  "topic": "haier/things/aa-bb-cc-dd-ee-ff/event/appliancestatus/update",
+  "payload": {
+   "parameters": [
+    {
+     "parName": "currentElectricityUsed",
+     "parOldVal": "0.12",
+     "parNewVal": "0.15"
+    },
+    {
+     "parName": "remainingMainWashTime",
+     "parOldVal": "37",
+     "parNewVal": "36"
+    },
+    {
+     "parName": "totalElectricityUsed",
+     "parOldVal": "240.83",
+     "parNewVal": "240.86"
+    },
+    {
+     "parName": "remainingTimeMM",
+     "parOldVal": "73",
+     "parNewVal": "72"
+    }
+   ],
+   "macAddress": "aa-bb-cc-dd-ee-ff",
+   "applianceTypeName": "WM",
+   "eventId": "1",
+   "timestamp": "2026-10-11T09:04:20.1Z",
+   "transactionId": "aa-bb-cc-dd-ee-ff_2026-10-11T09:04:20.1Z"
+  }
+ },
+ {
+  "received": "11:05:20.231",
+  "topic": "haier/things/aa-bb-cc-dd-ee-ff/event/appliancestatus/update",
+  "payload": {
+   "parameters": [
+    {
+     "parName": "currentElectricityUsed",
+     "parOldVal": "0.15",
+     "parNewVal": "0.18"
+    },
+    {
+     "parName": "remainingMainWashTime",
+     "parOldVal": "36",
+     "parNewVal": "35"
+    },
+    {
+     "parName": "totalElectricityUsed",
+     "parOldVal": "240.86",
+     "parNewVal": "240.89"
+    },
+    {
+     "parName": "remainingTimeMM",
+     "parOldVal": "72",
+     "parNewVal": "71"
+    }
+   ],
+   "macAddress": "aa-bb-cc-dd-ee-ff",
+   "applianceTypeName": "WM",
+   "eventId": "1",
+   "timestamp": "2026-10-11T09:05:20.1Z",
+   "transactionId": "aa-bb-cc-dd-ee-ff_2026-10-11T09:05:20.1Z"
+  }
+ },
+ {
+  "received": "11:06:19.706",
+  "topic": "haier/things/aa-bb-cc-dd-ee-ff/event/appliancestatus/update",
+  "payload": {
+   "parameters": [
+    {
+     "parName": "currentElectricityUsed",
+     "parOldVal": "0.18",
+     "parNewVal": "0.21"
+    },
+    {
+     "parName": "remainingMainWashTime",
+     "parOldVal": "35",
+     "parNewVal": "34"
+    },
+    {
+     "parName": "totalElectricityUsed",
+     "parOldVal": "240.89",
+     "parNewVal": "240.92"
+    },
+    {
+     "parName": "remainingTimeMM",
+     "parOldVal": "71",
+     "parNewVal": "70"
+    }
+   ],
+   "macAddress": "aa-bb-cc-dd-ee-ff",
+   "applianceTypeName": "WM",
+   "eventId": "1",
+   "timestamp": "2026-10-11T09:06:19.6Z",
+   "transactionId": "aa-bb-cc-dd-ee-ff_2026-10-11T09:06:19.6Z"
+  }
+ },
+ {
+  "received": "11:07:19.702",
+  "topic": "haier/things/aa-bb-cc-dd-ee-ff/event/appliancestatus/update",
+  "payload": {
+   "parameters": [
+    {
+     "parName": "currentElectricityUsed",
+     "parOldVal": "0.21",
+     "parNewVal": "0.24"
+    },
+    {
+     "parName": "remainingMainWashTime",
+     "parOldVal": "34",
+     "parNewVal": "33"
+    },
+    {
+     "parName": "totalElectricityUsed",
+     "parOldVal": "240.92",
+     "parNewVal": "240.95"
+    },
+    {
+     "parName": "remainingTimeMM",
+     "parOldVal": "70",
+     "parNewVal": "69"
+    }
+   ],
+   "macAddress": "aa-bb-cc-dd-ee-ff",
+   "applianceTypeName": "WM",
+   "eventId": "1",
+   "timestamp": "2026-10-11T09:07:19.6Z",
+   "transactionId": "aa-bb-cc-dd-ee-ff_2026-10-11T09:07:19.6Z"
+  }
+ },
+ {
+  "received": "11:08:20.850",
+  "topic": "haier/things/aa-bb-cc-dd-ee-ff/event/appliancestatus/update",
+  "payload": {
+   "parameters": [
+    {
+     "parName": "currentElectricityUsed",
+     "parOldVal": "0.24",
+     "parNewVal": "0.27"
+    },
+    {
+     "parName": "remainingMainWashTime",
+     "parOldVal": "33",
+     "parNewVal": "32"
+    },
+    {
+     "parName": "totalElectricityUsed",
+     "parOldVal": "240.95",
+     "parNewVal": "240.98"
+    },
+    {
+     "parName": "remainingTimeMM",
+     "parOldVal": "69",
+     "parNewVal": "68"
+    }
+   ],
+   "macAddress": "aa-bb-cc-dd-ee-ff",
+   "applianceTypeName": "WM",
+   "eventId": "1",
+   "timestamp": "2026-10-11T09:08:20.7Z",
+   "transactionId": "aa-bb-cc-dd-ee-ff_2026-10-11T09:08:20.7Z"
+  }
+ },
+ {
+  "received": "11:09:20.361",
+  "topic": "haier/things/aa-bb-cc-dd-ee-ff/event/appliancestatus/update",
+  "payload": {
+   "parameters": [
+    {
+     "parName": "currentElectricityUsed",
+     "parOldVal": "0.27",
+     "parNewVal": "0.30"
+    },
+    {
+     "parName": "remainingMainWashTime",
+     "parOldVal": "32",
+     "parNewVal": "31"
+    },
+    {
+     "parName": "totalElectricityUsed",
+     "parOldVal": "240.98",
+     "parNewVal": "241.01"
+    },
+    {
+     "parName": "remainingTimeMM",
+     "parOldVal": "68",
+     "parNewVal": "67"
+    }
+   ],
+   "macAddress": "aa-bb-cc-dd-ee-ff",
+   "applianceTypeName": "WM",
+   "eventId": "1",
+   "timestamp": "2026-10-11T09:09:20.2Z",
+   "transactionId": "aa-bb-cc-dd-ee-ff_2026-10-11T09:09:20.2Z"
+  }
+ },
+ {
+  "received": "11:10:20.494",
+  "topic": "haier/things/aa-bb-cc-dd-ee-ff/event/appliancestatus/update",
+  "payload": {
+   "parameters": [
+    {
+     "parName": "currentElectricityUsed",
+     "parOldVal": "0.30",
+     "parNewVal": "0.33"
+    },
+    {
+     "parName": "remainingMainWashTime",
+     "parOldVal": "31",
+     "parNewVal": "30"
+    },
+    {
+     "parName": "totalElectricityUsed",
+     "parOldVal": "241.01",
+     "parNewVal": "241.04"
+    },
+    {
+     "parName": "remainingTimeMM",
+     "parOldVal": "67",
+     "parNewVal": "66"
+    }
+   ],
+   "macAddress": "aa-bb-cc-dd-ee-ff",
+   "applianceTypeName": "WM",
+   "eventId": "1",
+   "timestamp": "2026-10-11T09:10:20.4Z",
+   "transactionId": "aa-bb-cc-dd-ee-ff_2026-10-11T09:10:20.4Z"
+  }
+ }
+]

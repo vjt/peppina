@@ -1,6 +1,6 @@
 # Push: hOn events over MQTT
 
-Status: on the `mqtt` branch, not released. Until 0.3.5 Peppina asked hOn for
+Status: released in 0.4.0. Until 0.3.5 Peppina asked hOn for
 the state every 60 seconds, and a change that came and went within a minute
 was never seen: remote control switched off and on again, for one, so the
 "load left in remote" automation did not fire.

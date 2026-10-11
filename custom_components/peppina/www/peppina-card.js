@@ -310,6 +310,10 @@ class PeppinaCard extends HTMLElement {
             <button class="go start">Avvia</button>
             <button class="stop">Ferma</button>
           </div>
+          <div class="row auto">
+            <div><label>Avvio automatico</label><div class="autostate"></div></div>
+            <button class="autotoggle"></button>
+          </div>
           <div class="row">
             <div><label>Avvio alle</label><input type="time" class="when"></div>
             <button class="schedule">Programma</button>
@@ -323,6 +327,7 @@ class PeppinaCard extends HTMLElement {
       wrap: $(".wrap"), lcd: $(".lcd"), big: $(".big"), small: $(".small"),
       chips: $(".chips"), program: $(".program"), start: $(".start"),
       settemp: $(".settemp"), setspin: $(".setspin"),
+      auto: $(".auto"), autostate: $(".autostate"), autotoggle: $(".autotoggle"),
       stop: $(".stop"), when: $(".when"), schedule: $(".schedule"), cancel: $(".cancel"),
     };
     this.$.program.addEventListener("change", (e) =>
@@ -331,6 +336,8 @@ class PeppinaCard extends HTMLElement {
       this.$[role].addEventListener("change", (e) =>
         this._call("select", "select_option", role, { option: e.target.value }));
     }
+    this.$.autotoggle.addEventListener("click", () =>
+      this._call("homeassistant", "toggle", "auto"));
     this.$.start.addEventListener("click", () => this._call("button", "press", "start"));
     this.$.stop.addEventListener("click", () => this._call("button", "press", "stop"));
     this.$.cancel.addEventListener("click", () => this._call("button", "press", "cancel"));
@@ -428,6 +435,18 @@ class PeppinaCard extends HTMLElement {
     this._fillSelect("select", this.$.program, prettyProgram);
     this._fillSelect("settemp", this.$.settemp, (v) => (v === "0" ? "Freddo" : `${v}°C`));
     this._fillSelect("setspin", this.$.setspin, (v) => (v === "0" ? "Niente" : `${v} giri`));
+
+    // Optional roles of the user's own: "auto" is whatever schedules loads
+    // (an automation, a switch), "watch" whatever waits to see them start.
+    const auto = this._val("auto");
+    this.$.auto.classList.toggle("hidden", !auto);
+    if (auto) {
+      const watch = this._val("watch") === "on";
+      this.$.autostate.textContent = auto !== "on" ? "Spento"
+        : watch ? (delayed ? `Attivo, controllo l'avvio delle ${hhmm(delayed)}` : "Attivo, controllo l'avvio")
+        : "Attivo";
+      this.$.autotoggle.textContent = auto === "on" ? "Spegni" : "Accendi";
+    }
 
     const canStart = on && remote && !running && !paused;
     this.$.start.disabled = !canStart;

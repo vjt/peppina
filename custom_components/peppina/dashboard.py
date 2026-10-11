@@ -74,6 +74,24 @@ async def async_save_dashboard(hass: HomeAssistant) -> None:
         _LOGGER.exception("Dashboard setup failed, Lovelace internals may have changed")
 
 
+async def _added_by_hand(storage) -> dict[str, dict[str, str]]:
+    """Card roles outside ROLES, by view title: entities of the user's own
+    (say automation.x as "auto"), which a rewrite must not drop."""
+    from homeassistant.components.lovelace.dashboard import ConfigNotFound
+
+    try:
+        config = await storage.async_load(False)
+    except ConfigNotFound:
+        return {}
+    kept = {}
+    for view in config.get("views", []):
+        for card in view.get("cards", []):
+            if card.get("type") == "custom:peppina-card":
+                extra = {k: v for k, v in card.get("entities", {}).items() if k not in ROLES}
+                kept[view.get("title")] = extra
+    return kept
+
+
 async def _save(hass: HomeAssistant, washers: list) -> None:
     from homeassistant.components.lovelace.dashboard import LovelaceStorage
 
@@ -97,8 +115,9 @@ async def _save(hass: HomeAssistant, washers: list) -> None:
 
     registry = er.async_get(hass)
     views = []
+    kept = await _added_by_hand(storage)
     for washer in washers:
-        entities = {}
+        entities = dict(kept.get(washer.name, {}))
         for role, key in ROLES.items():
             unique_id = f"{DOMAIN}_{washer.mac}_{key}"
             for domain in PLATFORMS:

@@ -59,6 +59,12 @@ The delayed start is scheduled by Home Assistant, not by the appliance: a
 start that is still in the future survives a restart, and a missed one is
 dropped instead of firing late.
 
+The card also takes two roles of your own, added by hand to its `entities`
+in the dashboard's raw configuration and kept when Peppina rewrites the page:
+`auto`, whatever schedules loads for you (an automation or a switch; the card
+shows it on or off and toggles it), and `watch`, an `input_boolean` that is on
+while something waits to see a scheduled start happen.
+
 The status entities use the same ids and states as the hon integration's, so
 their history and the automations built on them carry over when you switch.
 A second washer gets the same ids with a `_2` suffix.

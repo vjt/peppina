@@ -208,3 +208,34 @@ def test_value_is_what_start_sends(washer):
     assert command.value("spinSpeed", {"spinSpeed": "1200"}) == "1200"
     assert command.value("spinSpeed", {"spinSpeed": "1400"}) == "800"  # not allowed
     assert washer.start_command("iot_wash_quick").value("spinSpeed", {}) is None
+
+
+def test_program_metadata(washer):
+    cotton = washer.start_command("hqd_cotton")
+    assert cotton.key == "PROGRAMS.WM_WD.HQD_COTTON"
+    assert cotton.description == "start"
+    assert cotton.info("remoteActionable") == ["1"]
+    assert cotton.info("missing") == []
+
+
+def test_ancillary_values_keep_hon_order():
+    cluster = {
+        "typology": "enum",
+        "enumValues": ["quick", "eco", "traditional"],
+        "defaultValue": "[quick|eco|traditional]",
+    }
+    appliance = Appliance(INFO)
+    appliance.load_commands(
+        {
+            **COMMANDS,
+            "startProgram": {
+                "PROGRAMS.WM_WD.HQD_QUICK": {
+                    "parameters": {},
+                    "ancillaryParameters": {"programCluster": cluster},
+                }
+            },
+        }
+    )
+    assert appliance.start_command("hqd_quick").info("programCluster") == [
+        "quick", "eco", "traditional",
+    ]

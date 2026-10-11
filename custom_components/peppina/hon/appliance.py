@@ -81,14 +81,38 @@ def _parameters(attrs: dict) -> dict[str, Parameter]:
     }
 
 
+def _values(attrs: dict) -> list[str]:
+    """A parameter's values in hOn's order: the fixed one, or the enum's."""
+    if attrs.get("typology") == "fixed":
+        return [str(attrs.get("fixedValue"))]
+    if attrs.get("typology") == "enum":
+        return [str(v) for v in attrs.get("enumValues") or []]
+    return []
+
+
 class Command:
     """A command, or one program of a multi-program command like startProgram."""
 
-    def __init__(self, name: str, attrs: dict, program: str | None = None) -> None:
+    def __init__(
+        self, name: str, attrs: dict, program: str | None = None, key: str | None = None
+    ) -> None:
         self.name = name
         self.program = program
+        # hOn's own name for it, e.g. PROGRAMS.WM_WD.HQD_COTTONS: the key of
+        # its texts in hOn's dictionary.
+        self.key = key or name
+        self.description: str = attrs.get("description") or ""
         self.parameters = _parameters(attrs.get("parameters", {}))
         self.ancillary = _parameters(attrs.get("ancillaryParameters", {}))
+        self._info = {
+            param: _values(value)
+            for param, value in (attrs.get("ancillaryParameters") or {}).items()
+            if isinstance(value, dict)
+        }
+
+    def info(self, key: str) -> list[str]:
+        """An ancillary parameter's values in hOn's order, e.g. programCluster."""
+        return self._info.get(key, [])
 
     def payload(self, current: dict) -> tuple[dict, dict]:
         """(parameters, ancillaryParameters) to send.
@@ -144,7 +168,7 @@ class Appliance:
             first = next(iter(attrs.values()), None)
             if isinstance(first, dict) and "parameters" in first:
                 self.commands[name] = {
-                    key.split(".")[-1].lower(): Command(name, sub, key.split(".")[-1].lower())
+                    key.split(".")[-1].lower(): Command(name, sub, key.split(".")[-1].lower(), key)
                     for key, sub in attrs.items()
                     if isinstance(sub, dict)
                 }

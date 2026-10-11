@@ -260,6 +260,9 @@ class ProgramPicker {
     const head = el("span", "ptop");
     head.append(el("span", "pn", p.name));
     if (p.tag) head.append(el("span", "ptag", STRINGS.tags[p.tag] || p.tag));
+    for (const pill of [p.temp && STRINGS.temp(p.temp), p.spin && STRINGS.spin(p.spin)]) {
+      if (pill) head.append(el("span", "ppill", pill));
+    }
     const meta = [
       p.duration && STRINGS.duration(p.duration.minutes),
       p.usage > 0 ? STRINGS.times(p.usage) : !p.duration && p.load && STRINGS.load(p.load),
@@ -445,12 +448,16 @@ const STYLE = `
   .prow:hover { background: var(--secondary-background-color, #eee); }
   .prow.sel { background: rgba(3, 169, 244, 0.14); }
   .ptop { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-  .pn { font-weight: 600; }
+  .pn { font-weight: 600; min-width: 0; }
   .ptag {
     font-size: 0.72em; padding: 1px 7px; border-radius: 999px; white-space: nowrap;
     background: var(--secondary-background-color, #eee);
   }
-  .pmeta { margin-left: auto; font-size: 0.8em; opacity: 0.6; white-space: nowrap; }
+  .ppill {
+    flex: none; font-size: 0.72em; padding: 1px 7px; border-radius: 999px; white-space: nowrap;
+    background: var(--secondary-background-color, #eee);
+  }
+  .pmeta { flex: none; margin-left: auto; font-size: 0.8em; opacity: 0.6; white-space: nowrap; }
   .pdline { display: flex; align-items: flex-start; gap: 4px; margin-top: 2px; }
   .pd {
     flex: 1; min-width: 0; font-size: 0.82em; opacity: 0.65;

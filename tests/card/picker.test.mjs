@@ -214,6 +214,13 @@ test("the viewport probe shows only when asked for", () => {
   assert.match(t.$(".vprobe").textContent, /visual 390×500/);
 });
 
+test("each row shows temperature and spin pills on the name's line", () => {
+  const t = mount();
+  t.$(".field").click();
+  const head = t.$('.prow[data-key="hqd_cottons"] .ptop');
+  assert.deepEqual([...head.querySelectorAll(".ppill")].map((x) => x.textContent), ["freddo–90°C", "1400 giri"]);
+});
+
 test("descriptions read whole: tap in the card, the arrow in the list", () => {
   const t = mount();
   const desc = t.$(".pdesc");

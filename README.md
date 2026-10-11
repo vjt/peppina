@@ -85,7 +85,9 @@ purpose, and it is the best part.
   <img src="docs/images/dashboard.jpg" alt="The Peppina dashboard: the washer drawn in SVG, with program, start, stop and schedule controls" width="300">
 </p>
 
-<p align="center"><a href="docs/images/spin.mp4">See it spin (video, 4 s)</a></p>
+<p align="center">
+  <img src="docs/images/spin.gif" alt="Peppina on the spin cycle: the drum turns and the whole machine shakes" width="300">
+</p>
 
 ### What you can build on it
 

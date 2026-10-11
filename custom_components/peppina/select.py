@@ -24,7 +24,7 @@ async def async_setup_entry(hass, entry, async_add_entities):
 
 class PeppinaProgram(PeppinaEntity, SelectEntity, RestoreEntity):
     _attr_icon = "mdi:washing-machine"
-    # Names and descriptions of every program, ~20 KB: past the recorder's limit.
+    # Names and descriptions of every program, ~30 KB: past the recorder's limit.
     _unrecorded_attributes = frozenset({"programs"})
 
     def __init__(self, washer) -> None:

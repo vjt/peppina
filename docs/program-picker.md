@@ -1,6 +1,6 @@
 # Plan: a program picker that says what each program is
 
-Status: **approved 2026-10-11**, being implemented on `program-picker`.
+Status: **implemented** on `program-picker` (2026-10-11), not released.
 
 ## Why
 
@@ -63,8 +63,8 @@ scrolling past ones you never use.
     program; nothing is counted twice.
 - **To the card**: a `programs` attribute on the program select. For each
   program: key, name, description, group (key and label), tag, load,
-  temperature range, top spin and usage. About 20 KB, above the recorder's
-  16 KB limit, so it is left out of the recorder.
+  temperature range, top spin and usage. About 30 KB for 92 programs, above
+  the recorder's 16 KB limit, so it is left out of the recorder.
 
 ### Card
 
@@ -101,6 +101,37 @@ scrolling past ones you never use.
   already follow Home Assistant's language, through the dictionary. The rest
   of the card is still Italian. The new strings sit in one table, so
   translating the card later means filling one table per language.
+
+## Measured (2026-10-11)
+
+- **Dictionary:** Italian is version 4368, downloaded and parsed in 0.2 s
+  through `HonClient`. For a language it lacks, hOn answers with English
+  (version 6222).
+- **vjt's washer:**
+  - All 92 programs get a name from the dictionary.
+  - Groups: Tradizionali 20, Delicati 16, Sport 9, Rapidi 8, Casa 8,
+    Macchie 6, Salute 6, Pets 3, Ariel 3, Dash 3, Eco 2, Baby 1,
+    Business 1; 6 without a cluster.
+  - The `programs` attribute is 29.5 KB.
+- **Usage from the machine counters alone:** Smart A.I. 192, Eco 40-60 38,
+  Baby Care 5, Cotone 4, Sintetici 4.
+- **Card, checked in jsdom against those 92 programs** (12 checks, outside
+  the repo):
+  - field and chips;
+  - the order of the sections, and the tags;
+  - accent-insensitive search;
+  - pick and close;
+  - no rebuild on unrelated updates;
+  - the fallback without the attribute;
+  - dictionary text never parsed as markup.
+- **Home Assistant 2026.9.4 test** (outside the repo):
+  - the cache per dictionary version and the language fallback;
+  - counts persisted and only on accepted starts;
+  - the attribute and its exclusion from the recorder.
+- **Not measured:**
+  - The look of the card in a real browser: headless browsers cannot run
+    in the sandbox the work was done in.
+  - The card inside Home Assistant on a phone.
 
 ## Testing
 

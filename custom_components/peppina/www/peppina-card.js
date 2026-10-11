@@ -74,11 +74,14 @@ class ProgramPicker {
     };
     this._onPick = onPick;
     this._programs = [];
+    this._onKey = (e) => e.key === "Escape" && this.close();
     this.$.field.addEventListener("click", () => this.open());
     $(".close").addEventListener("click", () => this.close());
     $(".backdrop").addEventListener("click", () => this.close());
-    this.$.sheet.addEventListener("keydown", (e) => e.key === "Escape" && this.close());
-    this.$.search.addEventListener("input", () => this._render());
+    this.$.search.addEventListener("input", () => {
+      this.$.list.scrollTop = 0;
+      this._render();
+    });
     this.$.list.addEventListener("click", (e) => {
       const row = e.target.closest(".prow");
       if (!row) return;
@@ -92,6 +95,12 @@ class ProgramPicker {
     this.$.box.classList.toggle("hidden", !sel);
     if (!sel || sel === this._sel) return;
     this._sel = sel;
+    // Unavailable, the state has lost its attributes: keep what was shown.
+    if (["unavailable", "unknown"].includes(sel.state)) {
+      this.$.field.disabled = true;
+      this.close();
+      return;
+    }
     const options = sel.attributes.options || [];
     this._programs = sel.attributes.programs
       || options.map((key) => ({ key, name: prettyProgram(key), description: "", usage: 0 }));
@@ -111,6 +120,7 @@ class ProgramPicker {
   open() {
     this.$.search.value = "";
     this.$.sheet.classList.remove("hidden");
+    document.addEventListener("keydown", this._onKey);
     this.$.list.scrollTop = 0;
     this._render();
     const sel = this.$.list.querySelector(".prow.sel");
@@ -119,7 +129,10 @@ class ProgramPicker {
   }
 
   close() {
+    if (!this.isOpen) return;
     this.$.sheet.classList.add("hidden");
+    document.removeEventListener("keydown", this._onKey);
+    this.$.field.focus({ preventScroll: true });
   }
 
   _render() {
@@ -291,16 +304,19 @@ const STYLE = `
     position: fixed; inset: 0; z-index: 10;
     display: flex; align-items: flex-end; justify-content: center;
   }
-  .sheet .backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.45); }
+  .sheet .backdrop {
+    position: absolute; inset: 0; background: rgba(0, 0, 0, 0.45); touch-action: none;
+  }
   .sheetbox {
-    position: relative; width: min(100%, 560px); max-height: 85vh; box-sizing: border-box;
+    position: relative; width: min(100%, 560px); max-height: 85vh; max-height: 85dvh;
+    box-sizing: border-box;
     display: flex; flex-direction: column;
     background: var(--card-background-color, #fff); color: var(--primary-text-color);
     border-radius: 20px 20px 0 0; box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.25);
     padding-bottom: env(safe-area-inset-bottom);
     font-family: var(--paper-font-body1_-_font-family, system-ui, sans-serif);
   }
-  .sheethead { display: flex; gap: 8px; padding: 12px; }
+  .sheethead { display: flex; gap: 8px; padding: 12px; touch-action: none; }
   .sheethead .search {
     flex: 1; min-width: 0; box-sizing: border-box; font: inherit; font-size: 1em;
     padding: 10px 12px; border-radius: 12px; border: 1px solid var(--divider-color, #ccc);
@@ -332,7 +348,7 @@ const STYLE = `
   .empty { padding: 24px; text-align: center; opacity: 0.6; }
   @media (min-width: 700px) {
     .sheet { align-items: center; }
-    .sheetbox { border-radius: 20px; max-height: 80vh; }
+    .sheetbox { border-radius: 20px; max-height: 80vh; max-height: 80dvh; }
   }
   .hidden { display: none !important; }
   .side { display: flex; flex-direction: column; align-items: center; gap: 20px;

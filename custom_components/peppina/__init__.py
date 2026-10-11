@@ -23,8 +23,9 @@ from homeassistant.helpers.event import async_track_point_in_time
 from homeassistant.helpers.typing import ConfigType
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
-from .catalog import Usage, async_texts
+from .catalog import Durations, Usage, async_texts
 from .hon import Appliance, Command, HonAuthError, HonClient, HonError
+from .hon.durations import DurationWatch, activity_duration
 from .hon.programs import describe, dictionary_keys
 from .hon.push import HonPush
 
@@ -42,6 +43,7 @@ UPDATE_INTERVAL = timedelta(seconds=60)
 # While the push is up, polling only guards against a push that went quiet.
 PUSH_UPDATE_INTERVAL = timedelta(minutes=10)
 USAGE = f"{DOMAIN}_usage"
+DURATIONS = f"{DOMAIN}_durations"
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -53,6 +55,9 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     usage = Usage(hass)
     await usage.async_load()
     hass.data[USAGE] = usage
+    durations = Durations(hass)
+    await durations.async_load()
+    hass.data[DURATIONS] = durations
     return True
 
 
@@ -66,7 +71,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             appliance = Appliance(info)
             appliance.load_commands(await client.commands(info))
             if appliance.is_washer:
-                washers.append(Washer(hass, entry, client, appliance, hass.data[USAGE]))
+                washers.append(
+                    Washer(hass, entry, client, appliance, hass.data[USAGE], hass.data[DURATIONS])
+                )
     except HonAuthError as err:
         raise ConfigEntryError(f"hOn refused the credentials: {err}") from err
     except (aiohttp.ClientError, TimeoutError, HonError) as err:
@@ -82,6 +89,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entry.async_create_background_task(
             hass, _load_texts(hass, client, washers), f"{DOMAIN} texts"
         )
+        for washer in washers:
+            entry.async_create_background_task(
+                hass, washer.async_seed_duration(), f"{DOMAIN} last activity"
+            )
 
     from .dashboard import async_save_dashboard
 
@@ -143,11 +154,14 @@ class Washer:
         client: HonClient,
         appliance: Appliance,
         usage: Usage,
+        durations: Durations,
     ) -> None:
         self.hass = hass
         self.client = client
         self.appliance = appliance
         self.usage = usage
+        self.durations = durations
+        self._watch = DurationWatch()
         # Program names and descriptions from hOn's dictionary, {} until loaded.
         self.texts: dict[str, str] = {}
         self.mac = appliance.mac
@@ -185,6 +199,7 @@ class Washer:
             self._held.append((topic, payload))
             return
         complete = self.appliance.load_event(topic, payload)
+        self._observe()
         # Not async_set_updated_data: that would put off the fallback poll
         # and drop a refresh already asked for.
         self.coordinator.async_update_listeners()
@@ -211,7 +226,26 @@ class Washer:
             held, self._held = self._held, None
             for topic, payload in held:
                 self.appliance.load_event(topic, payload)
+        self._observe()
         return self.appliance.parameters
+
+    def _observe(self) -> None:
+        """Keep the machine's duration estimate, when the state shows one."""
+        if reading := self._watch.observe(self.appliance):
+            self.durations.keep(self.mac, reading)
+
+    async def async_seed_duration(self) -> None:
+        """The last cycle's estimate, for a program the machine has not shown
+        one for since."""
+        try:
+            activity = await self.client.last_activity(self.appliance)
+        except (aiohttp.ClientError, TimeoutError, HonError) as err:
+            _LOGGER.debug("%s: no last activity from hOn (%s)", self.name, err)
+            return
+        reading = activity_duration(self.appliance, activity)
+        if reading and reading["program"] not in self.durations.get(self.mac):
+            self.durations.keep(self.mac, reading)
+            self._notify()
 
     @property
     def programs(self) -> list[str]:
@@ -219,7 +253,9 @@ class Washer:
 
     def program_list(self) -> list[dict]:
         """Every program as the card shows it: name, group, load, usage."""
-        return describe(self.appliance, self.texts, self.usage.counts(self.mac))
+        return describe(
+            self.appliance, self.texts, self.usage.counts(self.mac), self.durations.get(self.mac)
+        )
 
     def set_texts(self, texts: dict[str, str]) -> None:
         self.texts = texts
@@ -258,6 +294,7 @@ class Washer:
             self.appliance.start_command(program), f"start of {program}", self.settings
         )
         self.usage.count(self.mac, program)
+        self._watch.started(program)
         self._notify()
         await self.coordinator.async_request_refresh()
 

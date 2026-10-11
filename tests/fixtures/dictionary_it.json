@@ -1,0 +1,39 @@
+{
+ "PROGRAMS": {
+  "WM_WD": {
+   "HQD_SMART": "Smart A.I.",
+   "HQD_SMART_DESCRIPTION": "Questo programma grazie all'Intelligenza Artificiale adatta automaticamente i parametri e i tempi di lavaggio. Al termine puoi consultare un report con i risparmi e i risultati ottenuti. Indicato per tessuti di cotone, sintetici e misti, normalmente sporchi.",
+   "HQD_QUICK_15": "Express 15'",
+   "HQD_QUICK_15_DESCRIPTION": "Ciclo super-rapido completo (lavaggio, risciacquo e centrifuga) per capi di cotone e misti poco sporchi.",
+   "IOT_WASH_RAPID_14": "Rapido 14'",
+   "IOT_WASH_RAPID_14_DESCRIPTION": "Ciclo super-rapido completo (lavaggio, risciacquo e centrifuga) per capi di cotone e misti poco sporchi.",
+   "HQD_COTTONS": "Cotone",
+   "HQD_COTTONS_DESCRIPTION": "Ciclo realizzato per sviluppare il massimo grado di lavaggio per capi in cotone, anche a pieno carico. Centrifuga finale alla massima velocità (regolabile).",
+   "IOT_WASH_COTTON": "Cotone",
+   "IOT_WASH_COTTON_DESCRIPTION": "Ciclo realizzato per sviluppare il massimo grado di lavaggio per capi in cotone, anche a pieno carico. Centrifuga finale alla massima velocità (regolabile).",
+   "IOT_WASH_WINE_STAINS": "Macchie di Vino",
+   "IOT_WASH_WINE_STAINS_DESCRIPTION": "Programma ideato per eliminare macchie di vino da tessuti resistenti di cotone e misti.",
+   "HQD_SYNTHETIC_AND_COLOURED": "Sintetici",
+   "HQD_SYNTHETIC_AND_COLOURED_DESCRIPTION": "Ciclo ottimizzato per il lavaggio di tessuti sintetici o misti con centrifuga finale ad azione delicata per ridurre la formazione di pieghe.",
+   "IOT_WASH_COLOURED": "Colorati",
+   "IOT_WASH_COLOURED_DESCRIPTION": "Questo programma permette di lavare in modo congiunto biancheria di diverso colore e tessuto. Il lavaggio ed il risciacquo sono ottimizzati nei ritmi di rotazione del cesto e nei livelli di acqua. La centrifuga ad azione delicata, assicura una ridotta formazione di pieghe sui tessuti.",
+   "IOT_WASH_COLORED": "Colorati",
+   "IOT_WASH_COLORED_DESCRIPTION": "Ciclo specifico per capi colorati (cotone e misti), normalmente sporchi, senza alterarne la lucentezza originale.",
+   "HQD_ECO_40_60_DEGREES": "Eco 40-60",
+   "HQD_ECO_40_60_DEGREES_DESCRIPTION": "Il programma ECO 40-60 è in grado di lavare biancheria di cotone normalmente sporca, dichiarata lavabile a 40°C o 60°C, insieme nello stesso ciclo. Questo programma viene utilizzato per valutare la conformità con la Direttiva UE Ecodesign (progettazione ecocompatibile dei prodotti).",
+   "HQD_BABYCARE": "Baby Care",
+   "HQD_BABYCARE_DESCRIPTION": "Ciclo studiato per il lavaggio accurato dei capi dei bambini, garantendo la perfetta eliminazione dei residui di detersivo.",
+   "IOT_WASH_BABY_SANITIZER": "Igienizzante",
+   "IOT_WASH_BABY_SANITIZER_DESCRIPTION": "Permette di igienizzare a 60°C tutti i vestitini resistenti dei bambini, senza traccia di detersivo."
+  }
+ },
+ "GUIDED_WASHING": {
+  "CLUSTER": {
+   "TRADITIONAL": "Tradizionali",
+   "QUICK": "Rapidi",
+   "ECO": "Eco",
+   "STAINS": "Macchie",
+   "HEALTH": "Salute"
+  }
+ }
+}

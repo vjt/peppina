@@ -140,8 +140,10 @@ class HonClient:
         data = await self._request("GET", "/commands/v1/context", params=params)
         return data.get("payload", {})
 
-    async def send(self, appliance: Appliance, command: Command) -> bool:
-        parameters, ancillary = command.payload(appliance.parameters)
+    async def send(
+        self, appliance: Appliance, command: Command, settings: dict | None = None
+    ) -> bool:
+        parameters, ancillary = command.payload({**appliance.parameters, **(settings or {})})
         now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
         body = {
             "macAddress": appliance.mac,

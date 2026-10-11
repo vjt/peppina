@@ -270,6 +270,25 @@ class PeppinaCard extends HTMLElement {
     this._hass.callService(domain, service, { entity_id: id, ...data });
   }
 
+  _fillSelect(role, select, label) {
+    const sel = this._state(role);
+    select.closest("div").classList.toggle("hidden", !sel);
+    if (!sel) return;
+    const opts = sel.attributes.options || [];
+    if (select.dataset.opts !== opts.join(",")) {
+      select.innerHTML = "";
+      for (const o of opts) {
+        const el = document.createElement("option");
+        el.value = o;
+        el.textContent = label(o);
+        select.appendChild(el);
+      }
+      select.dataset.opts = opts.join(",");
+    }
+    select.disabled = opts.length < 2;
+    if (this.shadowRoot.activeElement !== select) select.value = sel.state;
+  }
+
   _build() {
     const root = this.shadowRoot || this.attachShadow({ mode: "open" });
     root.innerHTML = `
@@ -282,6 +301,10 @@ class PeppinaCard extends HTMLElement {
           <div class="chips"></div>
           <div class="row">
             <div><label>Programma</label><select class="program"></select></div>
+          </div>
+          <div class="row">
+            <div><label>Temperatura</label><select class="settemp"></select></div>
+            <div><label>Centrifuga</label><select class="setspin"></select></div>
           </div>
           <div class="row">
             <button class="go start">Avvia</button>
@@ -299,10 +322,15 @@ class PeppinaCard extends HTMLElement {
     this.$ = {
       wrap: $(".wrap"), lcd: $(".lcd"), big: $(".big"), small: $(".small"),
       chips: $(".chips"), program: $(".program"), start: $(".start"),
+      settemp: $(".settemp"), setspin: $(".setspin"),
       stop: $(".stop"), when: $(".when"), schedule: $(".schedule"), cancel: $(".cancel"),
     };
     this.$.program.addEventListener("change", (e) =>
       this._call("select", "select_option", "select", { option: e.target.value }));
+    for (const role of ["settemp", "setspin"]) {
+      this.$[role].addEventListener("change", (e) =>
+        this._call("select", "select_option", role, { option: e.target.value }));
+    }
     this.$.start.addEventListener("click", () => this._call("button", "press", "start"));
     this.$.stop.addEventListener("click", () => this._call("button", "press", "stop"));
     this.$.cancel.addEventListener("click", () => this._call("button", "press", "cancel"));
@@ -397,22 +425,9 @@ class PeppinaCard extends HTMLElement {
       this.$.chips.appendChild(c);
     }
 
-    const sel = this._state("select");
-    if (sel) {
-      const opts = sel.attributes.options || [];
-      const select = this.$.program;
-      if (select.dataset.opts !== opts.join(",")) {
-        select.innerHTML = "";
-        for (const o of opts) {
-          const el = document.createElement("option");
-          el.value = o;
-          el.textContent = prettyProgram(o);
-          select.appendChild(el);
-        }
-        select.dataset.opts = opts.join(",");
-      }
-      if (this.shadowRoot.activeElement !== select) select.value = sel.state;
-    }
+    this._fillSelect("select", this.$.program, prettyProgram);
+    this._fillSelect("settemp", this.$.settemp, (v) => (v === "0" ? "Freddo" : `${v}°C`));
+    this._fillSelect("setspin", this.$.setspin, (v) => (v === "0" ? "Niente" : `${v} giri`));
 
     const canStart = on && remote && !running && !paused;
     this.$.start.disabled = !canStart;

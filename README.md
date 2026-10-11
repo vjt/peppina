@@ -48,6 +48,8 @@ Peppina polls every appliance that supports both `startProgram` and
 | `binary_sensor.peppina_door_status` / `binary_sensor.peppina_remote_control` | door open, remote control enabled |
 | `sensor.peppina_error` | hOn error code (`00` = none) |
 | `select.<name>_programma` | pick the program to run (remembered across restarts; defaults to the first one) |
+| `select.<name>_temperatura` | temperature for the next start, from what the program allows; your pick is remembered across programs and restarts, and a program that does not allow it uses its own value |
+| `select.<name>_centrifuga` | spin speed for the next start, same rules as the temperature |
 | `button.<name>_avvia` | start the selected program now |
 | `button.<name>_stop` | stop the running program (and drop any pending delayed start) |
 | `datetime.<name>_avvio_ritardato` | start the selected program at that instant |

@@ -39,6 +39,8 @@ ROLES = {
     "remote": "remote_control",
     "error": "error",
     "select": "program",
+    "settemp": "set_temperature",
+    "setspin": "set_spin_speed",
     "start": "start",
     "stop": "stop",
     "delayed": "delayed_start",

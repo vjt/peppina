@@ -54,6 +54,23 @@ class Parameter:
             pass
         return None
 
+    @property
+    def choices(self) -> list[str]:
+        """Every value the parameter can take, low to high."""
+        if self.typology == "enum":
+            return sorted(self.values, key=_number)
+        if self.typology == "range":
+            count = int(round((self.max - self.min) / self.step)) + 1
+            return [str(self.min + i * self.step) for i in range(count)]
+        return [str(self.default)]
+
+
+def _number(value: str) -> float:
+    try:
+        return float(value.replace(",", "."))
+    except ValueError:
+        return float("inf")
+
 
 def _parameters(attrs: dict) -> dict[str, Parameter]:
     return {
@@ -85,6 +102,12 @@ class Command:
         if self.program is not None:
             params["program"] = self.program
         return params, {key: p.default for key, p in self.ancillary.items()}
+
+    def value(self, key: str, current: dict) -> str | None:
+        """What the command would send for one parameter, as a string."""
+        if key not in self.parameters:
+            return None
+        return str(self.payload(current)[0][key])
 
 
 class Appliance:

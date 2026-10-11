@@ -117,6 +117,9 @@ class Washer:
             update_method=self._async_update,
         )
         self.program: str | None = None
+        # Temperature and spin the user picked, by hOn key. They outlive
+        # program changes: a program that does not allow one falls back.
+        self.settings: dict[str, str] = {}
         self.delayed_start: datetime | None = None
         self._unsub_delayed: Callable[[], None] | None = None
         self._listeners: list[Callable[[], None]] = []
@@ -132,19 +135,46 @@ class Washer:
     def programs(self) -> list[str]:
         return self.appliance.programs
 
+    def select_program(self, program: str) -> None:
+        if program != self.program:
+            self.program = program
+            self._notify()
+
+    def choices(self, key: str) -> list[str]:
+        """Values the selected program allows for one setting."""
+        if self.program not in self.programs:
+            return []
+        param = self.appliance.start_command(self.program).parameters.get(key)
+        return param.choices if param else []
+
+    def setting(self, key: str) -> str | None:
+        """The value a start would send now."""
+        if self.program not in self.programs:
+            return None
+        command = self.appliance.start_command(self.program)
+        return command.value(key, {**self.appliance.parameters, **self.settings})
+
+    def set_setting(self, key: str, value: str) -> None:
+        if value not in self.choices(key):
+            raise HomeAssistantError(f"{self.name}: {key}={value!r} not allowed by {self.program}")
+        self.settings[key] = value
+        self._notify()
+
     async def start(self) -> None:
         program = self.program
         if program not in self.programs:
             raise HomeAssistantError(f"{self.name}: unknown program {program!r}")
-        await self._send(self.appliance.start_command(program), f"start of {program}")
+        await self._send(
+            self.appliance.start_command(program), f"start of {program}", self.settings
+        )
 
     async def stop(self) -> None:
         self.cancel_delayed_start()
         await self._send(self.appliance.stop_command(), "stop")
 
-    async def _send(self, command: Command, what: str) -> None:
+    async def _send(self, command: Command, what: str, settings: dict | None = None) -> None:
         try:
-            accepted = await self.client.send(self.appliance, command)
+            accepted = await self.client.send(self.appliance, command, settings)
         except (aiohttp.ClientError, TimeoutError, HonError) as err:
             raise HomeAssistantError(f"{self.name}: {what} failed: {err}") from err
         if not accepted:

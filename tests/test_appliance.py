@@ -183,3 +183,28 @@ def test_context_without_shadow(washer):
 def test_program_name(washer, extra, expected):
     washer.load_context({**context(machMode="2"), **extra})
     assert washer.program_name == expected
+
+
+def test_choices_low_to_high(washer):
+    params = washer.start_command("hqd_cotton").parameters
+    assert params["temp"].choices == ["20", "30", "40", "50", "60"]
+    assert params["spinSpeed"].choices == ["400", "800", "1200"]
+    assert params["prCode"].choices == ["136"]
+
+
+def test_enum_choices_sort_as_numbers():
+    appliance = Appliance(INFO)
+    spin = {"typology": "enum", "enumValues": [0, 1000, 400, 1400], "defaultValue": "1000"}
+    commands = {**COMMANDS, "startProgram": {"P.W.X": {"parameters": {"spinSpeed": spin}}}}
+    appliance.load_commands(commands)
+    assert appliance.start_command("x").parameters["spinSpeed"].choices == [
+        "0", "400", "1000", "1400"
+    ]
+
+
+def test_value_is_what_start_sends(washer):
+    command = washer.start_command("hqd_cotton")
+    assert command.value("temp", {}) == "40"
+    assert command.value("spinSpeed", {"spinSpeed": "1200"}) == "1200"
+    assert command.value("spinSpeed", {"spinSpeed": "1400"}) == "800"  # not allowed
+    assert washer.start_command("iot_wash_quick").value("spinSpeed", {}) is None

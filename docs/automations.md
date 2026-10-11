@@ -317,6 +317,29 @@ critical and reaches everyone, home or away.
 Critical pushes need the iOS companion app's critical alerts permission;
 on Android use `channel` / `priority: high` instead of `push:`.
 
+## What it consumed
+
+When the cycle ends, what it took. The cycle sensors still hold the
+figures when the mode turns to `7`, and keep them after the machine zeroes
+its own two minutes later, so this can also run later (from the nag, say).
+
+```yaml
+- id: peppina_consumi
+  alias: 'Peppina: what it consumed'
+  triggers:
+  - trigger: state
+    entity_id: sensor.peppina_mode
+    to: '7'
+  actions:
+  - action: notify.mobile_app_alice
+    data:
+      title: Peppina ha finito
+      message: >-
+        Consumati {{ states('sensor.peppina_cycle_water') }} litri,
+        {{ states('sensor.peppina_cycle_energy') }} kWh
+  mode: single
+```
+
 ## Restarting Home Assistant
 
 A restart kills any automation run sitting in a `delay` or `for:`. If you

@@ -49,6 +49,9 @@ For each one it adds a device with:
 | `sensor.peppina_temperature` / `sensor.peppina_spin_speed` | settings of the running program |
 | `binary_sensor.peppina_door_status` / `binary_sensor.peppina_remote_control` | door open, remote control enabled |
 | `sensor.peppina_error` | hOn error code (`00` = none) |
+| `sensor.peppina_cycle_water` / `sensor.peppina_cycle_energy` | litres and kWh of the cycle under way, else of the last one: still there once the machine zeroes them after the cycle, and after a restart |
+| `sensor.peppina_total_water` / `sensor.peppina_total_energy` | the machine's life counters, in litres and kWh: meters the Energy dashboard takes (water consumption, individual devices) |
+| `sensor.peppina_wash_cycles` | cycles the machine has run in its life |
 | `select.<name>_programma` | pick the program to run (remembered across restarts; defaults to the first one). The card shows hOn's own names and descriptions in Home Assistant's language, grouped as in the hOn app, the most used first, with the machine's own duration estimate once it has given one |
 | `select.<name>_temperatura` | temperature for the next start, from what the program allows; your pick is remembered across programs and restarts, and a program that does not allow it uses its own value |
 | `select.<name>_centrifuga` | spin speed for the next start, same rules as the temperature |
@@ -56,6 +59,10 @@ For each one it adds a device with:
 | `button.<name>_stop` | stop the running program (and drop any pending delayed start) |
 | `datetime.<name>_avvio_ritardato` | start the selected program at that instant |
 | `button.<name>_annulla_avvio_ritardato` | drop the pending delayed start |
+
+The totals stay unknown rather than drop to 0 when the machine reports 0
+(Home Assistant would take that for a new meter and count the machine's
+whole life again).
 
 The delayed start is scheduled by Home Assistant, not by the appliance: a
 start that is still in the future survives a restart, and a missed one is
@@ -98,6 +105,7 @@ they are what the author runs on top of it:
   moment), send a critical push.
 - **Cancel when it cannot work.** If remote control is switched off before
   the delayed start, drop the pending start instead of letting it fail.
+- **What it consumed.** When the cycle ends, a push with its litres and kWh.
 - **The nag.** When the cycle ends, send a push every hour to whoever is
   home until someone taps "Stesa" (hung), plus one the moment you walk in
   the door; after 6 hours it goes critical to everyone, home or away.

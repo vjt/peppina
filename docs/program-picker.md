@@ -115,30 +115,60 @@ scrolling past ones you never use.
   - The `programs` attribute is 29.5 KB.
 - **Usage from the machine counters alone:** Smart A.I. 192, Eco 40-60 38,
   Baby Care 5, Cotone 4, Sintetici 4.
-- **Card, checked in jsdom against those 92 programs** (12 checks, outside
-  the repo):
+- **Card, checked in jsdom** against those 92 programs: 13 checks in
+  `tests/card` (`npm install && npm test`).
   - field and chips;
   - the order of the sections, and the tags;
   - accent-insensitive search;
-  - pick and close;
+  - pick and close, Esc;
   - no rebuild on unrelated updates;
+  - behaviour while unavailable;
   - the fallback without the attribute;
   - dictionary text never parsed as markup.
-- **Home Assistant 2026.9.4 test** (outside the repo):
-  - the cache per dictionary version and the language fallback;
-  - counts persisted and only on accepted starts;
+- **Home Assistant 2026.9.4 test** (outside the repo, which stays HA-free;
+  11 checks):
+  - the cache per dictionary version, shared by config entries, the
+    language fallback, and no caching of an empty extraction;
+  - counts persisted, only on accepted starts, before the refresh;
+  - a broken entity does not hold up a stop;
   - the attribute and its exclusion from the recorder.
 - **Not measured:**
-  - The look of the card in a real browser: headless browsers cannot run
-    in the sandbox the work was done in.
-  - The card inside Home Assistant on a phone.
+  - **The look of the card in a real browser**: headless browsers cannot
+    run in the sandbox the work was done in. Neither has the card been
+    seen inside Home Assistant on a phone.
+  - **Starts from Peppina and the machine's counters.** That a program
+    started remotely, a variant included, moves its knob position's counter
+    is assumed: the 192 → 193 of 2026-10-11 does not tell who started that
+    cycle.
+  - **Rough edges of the counting:**
+    - Peppina counts a start when hOn accepts it, the machine counts a
+      cycle when it ends. While a variant started by Peppina runs, its
+      knob program shows one less.
+    - A start that is accepted and then stopped keeps one count away from
+      the knob program for good.
+
+## Costs and follow-ups
+
+- **The `programs` attribute (~30 KB):**
+  - It is kept out of the recorder.
+  - It is still in `core.restore_state` (the select restores its state),
+    rewritten every 15 minutes.
+  - It is in the select's attributes in the more-info dialog.
+  - It goes to every `state_changed` consumer when it changes: at the end
+    of a cycle (counters) and when the names land.
+  - **Follow-up:** a `peppina/programs` websocket command that the card
+    calls would avoid all three.
+- **Android back** leaves the page instead of closing the sheet; handling
+  it means going through the history API.
+- **The rest of the card in other languages** (see "Not in this change").
 
 ## Testing
 
-- **pytest**: the catalog against the dump fixtures, extraction from a
-  dictionary fixture (a few keys of the public file), the usage merge, and
-  the count on start.
-- **Card**: a page outside the repo mounts the card with a fake `hass`, in
-  headless Chrome, with phone and desktop screenshots.
+- **pytest** (`tests/`): the catalog against real trimmed data, the edge
+  cases real data does not have, extraction from a dictionary fixture, the
+  usage merge and the client's dictionary fetch.
+- **jsdom** (`tests/card/`): the picker against the 92 real programs.
+- **Home Assistant**, outside the repo: storage, counting, cache, the
+  attribute.
 - **Live**: the real dictionary download, and usage seeded from the real
   counters.

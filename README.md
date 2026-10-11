@@ -98,8 +98,12 @@ they are what the author runs on top of it:
   moment), send a critical push.
 - **Cancel when it cannot work.** If remote control is switched off before
   the delayed start, drop the pending start instead of letting it fail.
-- **The nag.** When the cycle ends, send a push every hour until someone taps
-  "Stesa" (hung), plus one the moment you walk in the door.
+- **The nag.** When the cycle ends, send a push every hour to whoever is
+  home until someone taps "Stesa" (hung), plus one the moment you walk in
+  the door; after 6 hours it goes critical to everyone, home or away.
+
+The YAML for all of them, ready to copy, is in
+[docs/automations.md](docs/automations.md).
 
 <p align="center">
   <img src="docs/images/nag.png" alt="Push notification: Peppina finished at 20:02, hang the laundry" width="300">

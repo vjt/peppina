@@ -25,6 +25,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .catalog import Durations, Usage, async_texts
 from .hon import Appliance, Command, HonAuthError, HonClient, HonError
+from .hon.consumption import CycleConsumption
 from .hon.durations import DurationWatch, activity_duration
 from .hon.programs import describe, dictionary_keys
 from .hon.push import HonPush
@@ -162,6 +163,8 @@ class Washer:
         self.usage = usage
         self.durations = durations
         self._watch = DurationWatch()
+        # Water and energy of the cycle under way, else of the last one.
+        self.consumption = CycleConsumption()
         # Program names and descriptions from hOn's dictionary, {} until loaded.
         self.texts: dict[str, str] = {}
         self.mac = appliance.mac
@@ -230,9 +233,11 @@ class Washer:
         return self.appliance.parameters
 
     def _observe(self) -> None:
-        """Keep the machine's duration estimate, when the state shows one."""
+        """Keep the machine's duration estimate, when the state shows one,
+        and what the cycle consumed."""
         if reading := self._watch.observe(self.appliance):
             self.durations.keep(self.mac, reading)
+        self.consumption.observe(self.appliance)
 
     async def async_seed_duration(self) -> None:
         """What hOn kept of the last cycle (estimate, real duration), where

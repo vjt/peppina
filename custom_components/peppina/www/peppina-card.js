@@ -441,6 +441,14 @@ class PeppinaCard extends HTMLElement {
   }
 }
 
-customElements.define("peppina-card", PeppinaCard);
+// The frontend swaps window.customElements for a scoped-registry polyfill
+// while it boots. Loaded before that, the card lands in the native registry
+// only, the polyfill never sees it and the page shows "Configuration error".
+// Define again, wherever window.customElements points, once the app is up.
+const define = () => {
+  if (!customElements.get("peppina-card")) customElements.define("peppina-card", PeppinaCard);
+};
+define();
+customElements.whenDefined("home-assistant").then(define);
 window.customCards = window.customCards || [];
 window.customCards.push({ type: "peppina-card", name: "Peppina", description: "La lavatrice." });

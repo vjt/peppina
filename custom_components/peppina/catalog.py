@@ -1,6 +1,7 @@
 """Program names from hOn's dictionary (cached) and the starts Peppina sent."""
 from __future__ import annotations
 
+import asyncio
 import logging
 
 import aiohttp
@@ -11,6 +12,7 @@ from .hon import HonClient, HonError
 from .hon.programs import extract
 
 _LOGGER = logging.getLogger(__name__)
+TEXTS_LOCK = "peppina_texts_lock"
 
 
 async def async_texts(hass: HomeAssistant, client: HonClient, keys: list[str]) -> dict[str, str]:
@@ -18,8 +20,14 @@ async def async_texts(hass: HomeAssistant, client: HonClient, keys: list[str]) -
 
     Cached with hOn's dictionary version, so the multi-MB file comes down
     again only when hOn publishes a new one. Whatever is cached when hOn
-    cannot be reached; {} if nothing is.
+    cannot be reached; {} if nothing is. One at a time: config entries share
+    the cache, each adding its own keys.
     """
+    async with hass.data.setdefault(TEXTS_LOCK, asyncio.Lock()):
+        return await _async_texts(hass, client, keys)
+
+
+async def _async_texts(hass: HomeAssistant, client: HonClient, keys: list[str]) -> dict[str, str]:
     store = Store(hass, 1, "peppina.texts")
     cached = await store.async_load() or {}
     language = (hass.config.language or "en").split("-")[0].lower()
@@ -30,15 +38,22 @@ async def async_texts(hass: HomeAssistant, client: HonClient, keys: list[str]) -
         if found is None:
             return cached.get("texts", {})
         version, url = found
-        if (cached.get("language"), cached.get("version")) == (language, version) and set(
-            keys
-        ) <= set(cached.get("keys", [])):
+        same = (cached.get("language"), cached.get("version")) == (language, version)
+        known = set(cached.get("keys", [])) if same else set()
+        if set(keys) <= known:
             return cached["texts"]
-        texts = extract(await client.dictionary(url), keys)
+        wanted = sorted(known | set(keys))
+        texts = extract(await client.dictionary(url), wanted)
     except (aiohttp.ClientError, TimeoutError, ValueError, HonError) as err:
         _LOGGER.warning("hOn dictionary unavailable (%s), program names from the cache", err)
         return cached.get("texts", {})
-    await store.async_save({"language": language, "version": version, "keys": keys, "texts": texts})
+    if not texts:
+        # A dictionary laid out differently: better the old names than none.
+        _LOGGER.warning("hOn dictionary %s v%s has no program names we know", language, version)
+        return cached.get("texts", {})
+    await store.async_save(
+        {"language": language, "version": version, "keys": wanted, "texts": texts}
+    )
     return texts
 
 

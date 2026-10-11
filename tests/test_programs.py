@@ -131,3 +131,75 @@ def test_describe_without_dictionary(washer):
     assert cotton["group_name"] == "Traditional"
     eco = programs["hqd_eco_40_60_degrees"]
     assert (eco["temp"], eco["spin"]) == ([40, 40], 1400)
+
+
+def program(cluster="traditional", families=("download",), position="2", load=None, **extra):
+    """One synthetic program for the edge cases real data does not have."""
+    enum = lambda values: {"typology": "enum", "enumValues": list(values)}  # noqa: E731
+    ancillary = {
+        "programCluster": enum([cluster]),
+        "programFamily": enum(families),
+        "prPosition": {"typology": "fixed", "fixedValue": position},
+    }
+    if load is not None:
+        ancillary["suggestedLoadW"] = load
+    return {"parameters": {}, "ancillaryParameters": ancillary, **extra}
+
+
+def appliance_with(programs, **parameters):
+    appliance = Appliance({"macAddress": "aa-bb-cc-dd-ee-ff", "applianceTypeId": 1})
+    appliance.load_commands(
+        {
+            "applianceModel": {"options": {}},
+            "startProgram": {f"PROGRAMS.WM_WD.{key.upper()}": p for key, p in programs.items()},
+            "stopProgram": {"parameters": {}},
+        }
+    )
+    appliance.parameters = parameters
+    return appliance
+
+
+def test_odd_values_never_break_the_catalog():
+    appliance = appliance_with(
+        {
+            "iot_wash_comma": program(load={"typology": "fixed", "fixedValue": "4,5"}),
+            "iot_wash_empty": program(load={"typology": "fixed"}),
+            "iot_wash_junk": program(load={"typology": "fixed", "fixedValue": "lots"}),
+        }
+    )
+    loads = {p["key"]: p["load"] for p in describe(appliance, {}, {})}
+    assert loads == {"iot_wash_comma": 4.5, "iot_wash_empty": None, "iot_wash_junk": None}
+
+
+def test_names_in_other_scripts_keep_their_letters():
+    appliance = appliance_with({"hqd_a": program(families=("dashboard",)), "iot_wash_b": program()})
+    texts = {"PROGRAMS.WM_WD.HQD_A": "Хлопок", "PROGRAMS.WM_WD.IOT_WASH_B": "Синтетика"}
+    programs = describe(appliance, texts, {})
+    assert [p["name"] for p in programs] == ["Синтетика", "Хлопок"]
+    assert all(p["tag"] is None for p in programs)  # different names: no tags
+
+
+def test_voice_namesakes_read_as_guided():
+    appliance = appliance_with(
+        {"hqd_mix": program(families=("dashboard",)), "iot_wash_mix": program(families=("voice",))}
+    )
+    tags = {p["key"]: p["tag"] for p in describe(appliance, {"PROGRAMS.WM_WD.HQD_MIX": "Misti",
+                                                            "PROGRAMS.WM_WD.IOT_WASH_MIX": "Misti"}, {})}
+    assert tags == {"hqd_mix": None, "iot_wash_mix": "guided"}
+
+
+def test_knob_program_by_family_first():
+    # Two hqd_ programs on one position: the one on the knob (dashboard) takes
+    # the machine's count. Counters may come as "7.0".
+    appliance = appliance_with(
+        {"hqd_knob": program(families=("dashboard",)), "hqd_hidden": program(families=("hidden",))},
+        program2="7.0",
+    )
+    assert usage(appliance, {}) == {"hqd_knob": 7, "hqd_hidden": 0}
+
+
+def test_knob_program_by_prefix_when_no_family_says():
+    appliance = appliance_with(
+        {"hqd_duvet": program(families=("hidden",)), "iot_wash_jackets": program()}, program2="1"
+    )
+    assert usage(appliance, {}) == {"hqd_duvet": 1, "iot_wash_jackets": 0}

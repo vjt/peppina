@@ -84,7 +84,7 @@ def _parameters(attrs: dict) -> dict[str, Parameter]:
 def _values(attrs: dict) -> list[str]:
     """A parameter's values in hOn's order: the fixed one, or the enum's."""
     if attrs.get("typology") == "fixed":
-        return [str(attrs.get("fixedValue"))]
+        return [] if attrs.get("fixedValue") is None else [str(attrs["fixedValue"])]
     if attrs.get("typology") == "enum":
         return [str(v) for v in attrs.get("enumValues") or []]
     return []

@@ -29,7 +29,8 @@ GROUP_ORDER = (
 )
 CLUSTER_KEY = "GUIDED_WASHING.CLUSTER."
 # When names collide, the family tells programs apart; the knob one gets none.
-TAG_FAMILIES = ("care", "guided", "download", "featured")
+TAG_FAMILIES = ("care", "guided", "voice", "download", "featured")
+TAG_ALIASES = {"voice": "guided"}
 
 
 def dictionary_keys(appliance: Appliance) -> list[str]:
@@ -65,14 +66,25 @@ def usage(appliance: Appliance, own: dict[str, int]) -> dict[str, int]:
         if position := _first(appliance.start_command(program), "prPosition"):
             positions[position].append(program)
     for position, programs in positions.items():
-        knob = [p for p in programs if p.startswith("hqd_")]
         try:
-            counted = int(appliance.get(f"program{position}") or 0)
+            counted = int(float(appliance.get(f"program{position}") or 0))
         except (TypeError, ValueError):
             continue
-        if len(knob) == 1:
-            result[knob[0]] += max(0, counted - sum(own.get(p, 0) for p in programs))
+        if knob := _knob(appliance, programs):
+            result[knob] += max(0, counted - sum(own.get(p, 0) for p in programs))
     return result
+
+
+def _knob(appliance: Appliance, programs: list[str]) -> str | None:
+    """The position's program printed on the knob: hOn's dashboard family,
+    else the one hqd_ program; None when that is not one program."""
+    for found in (
+        [p for p in programs if "dashboard" in appliance.start_command(p).info("programFamily")],
+        [p for p in programs if p.startswith("hqd_")],
+    ):
+        if len(found) == 1:
+            return found[0]
+    return None
 
 
 def describe(appliance: Appliance, texts: dict[str, str], own: dict[str, int]) -> list[dict]:
@@ -94,7 +106,7 @@ def describe(appliance: Appliance, texts: dict[str, str], own: dict[str, int]) -
                 if cluster
                 else None,
                 "tag": None,
-                "load": float(load) if load else None,
+                "load": _float(load),
                 "temp": [temps[0], temps[-1]] if temps else None,
                 "spin": spins[-1] if spins else None,
                 "usage": counts[program],
@@ -104,7 +116,8 @@ def describe(appliance: Appliance, texts: dict[str, str], own: dict[str, int]) -
     names = Counter(_fold(p["name"]) for p in programs)
     for p in programs:
         if names[_fold(p["name"])] > 1 and "dashboard" not in families[p["key"]]:
-            p["tag"] = next((f for f in TAG_FAMILIES if f in families[p["key"]]), None)
+            tag = next((f for f in TAG_FAMILIES if f in families[p["key"]]), None)
+            p["tag"] = TAG_ALIASES.get(tag, tag)
     return sorted(programs, key=_rank)
 
 
@@ -123,6 +136,13 @@ def _first(command: Command, key: str) -> str | None:
     return next(iter(command.info(key)), None)
 
 
+def _float(value: str | None) -> float | None:
+    try:
+        return float(value.replace(",", ".")) if value else None
+    except ValueError:
+        return None
+
+
 def _numbers(command: Command, key: str) -> list[int]:
     param = command.parameters.get(key)
     try:
@@ -132,7 +152,10 @@ def _numbers(command: Command, key: str) -> list[int]:
 
 
 def _fold(text: str) -> str:
-    return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode().casefold()
+    """Case and accents off, every script's letters kept."""
+    return "".join(
+        c for c in unicodedata.normalize("NFKD", text) if not unicodedata.combining(c)
+    ).casefold()
 
 
 def _pretty(program: str) -> str:

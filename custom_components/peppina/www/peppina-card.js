@@ -212,7 +212,7 @@ const SVG = `
       <g class="water">
         <g class="wave">
           <path d="M40 300 q20 -12 40 0 t40 0 t40 0 t40 0 t40 0 t40 0 t40 0 t40 0 t40 0 t40 0
-                   v200 h-400z" fill="url(#water)"/>
+                   t40 0 t40 0 v200 h-480z" fill="url(#water)"/>
         </g>
       </g>
       <circle class="bubble" cx="170" cy="370" r="5" fill="#bfe6ff"/>

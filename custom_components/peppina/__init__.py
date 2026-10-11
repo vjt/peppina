@@ -259,10 +259,12 @@ class Washer:
         )
         self.usage.count(self.mac, program)
         self._notify()
+        await self.coordinator.async_request_refresh()
 
     async def stop(self) -> None:
         self.cancel_delayed_start()
         await self._send(self.appliance.stop_command(), "stop")
+        await self.coordinator.async_request_refresh()
 
     async def _send(self, command: Command, what: str, settings: dict | None = None) -> None:
         try:
@@ -271,7 +273,6 @@ class Washer:
             raise HomeAssistantError(f"{self.name}: {what} failed: {err}") from err
         if not accepted:
             raise HomeAssistantError(f"{self.name}: hOn rejected {what}")
-        await self.coordinator.async_request_refresh()
 
     def schedule_start(self, when: datetime) -> None:
         self.cancel_delayed_start()
@@ -303,4 +304,7 @@ class Washer:
 
     def _notify(self) -> None:
         for listener in list(self._listeners):
-            listener()
+            try:
+                listener()
+            except Exception:  # one broken entity must not hold up a stop
+                _LOGGER.exception("%s: updating an entity failed", self.name)

@@ -2,7 +2,8 @@
 
 Logs in to hOn by itself (see hon/) and, for every appliance that knows both
 the startProgram and stopProgram commands, adds its status sensors plus
-program, start, stop and delayed start controls.
+program, start, stop and delayed start controls. State changes arrive by push;
+polling stays as the fallback, every minute while the push is down.
 """
 from __future__ import annotations
 
@@ -23,6 +24,7 @@ from homeassistant.helpers.typing import ConfigType
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .hon import Appliance, Command, HonAuthError, HonClient, HonError
+from .hon.push import HonPush
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -35,6 +37,8 @@ PLATFORMS = [
     Platform.DATETIME,
 ]
 UPDATE_INTERVAL = timedelta(seconds=60)
+# While the push is up, polling only guards against a push that went quiet.
+PUSH_UPDATE_INTERVAL = timedelta(minutes=10)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -67,11 +71,33 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await washer.coordinator.async_config_entry_first_refresh()
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = washers
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    _start_push(hass, entry, client, washers)
 
     from .dashboard import async_save_dashboard
 
     await async_save_dashboard(hass)
     return True
+
+
+def _start_push(
+    hass: HomeAssistant, entry: ConfigEntry, client: HonClient, washers: list[Washer]
+) -> None:
+    """One push connection for the account; the entry cancels it on unload."""
+    by_topic = {topic: washer for washer in washers for topic in washer.appliance.topics}
+    if not by_topic:
+        return
+
+    @callback
+    def on_message(topic: str, payload: dict) -> None:
+        by_topic[topic].push(topic, payload)
+
+    @callback
+    def on_state(granted: set[str]) -> None:
+        for washer in set(by_topic.values()):
+            washer.push_state(washer.appliance.status_topic in granted)
+
+    push = HonPush(client, list(by_topic), on_message, on_state)
+    entry.async_create_background_task(hass, push.run(), f"{DOMAIN} push")
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -123,12 +149,41 @@ class Washer:
         self.delayed_start: datetime | None = None
         self._unsub_delayed: Callable[[], None] | None = None
         self._listeners: list[Callable[[], None]] = []
+        # Pushes that land while a context is on its way, None otherwise.
+        self._held: list[tuple[str, dict]] | None = None
+
+    @callback
+    def push(self, topic: str, payload: dict) -> None:
+        if self._held is not None:
+            self._held.append((topic, payload))
+            return
+        complete = self.appliance.load_event(topic, payload)
+        # Not async_set_updated_data: that would put off the fallback poll
+        # and drop a refresh already asked for.
+        self.coordinator.async_update_listeners()
+        if not complete:
+            self.hass.async_create_task(self.coordinator.async_request_refresh())
+
+    @callback
+    def push_state(self, live: bool) -> None:
+        """live: hOn pushes this appliance's status."""
+        self.coordinator.update_interval = PUSH_UPDATE_INTERVAL if live else UPDATE_INTERVAL
+        # Catch up on what happened while the push was down; the refresh also
+        # reschedules polling at the new interval.
+        self.hass.async_create_task(self.coordinator.async_request_refresh())
 
     async def _async_update(self) -> dict:
+        self._held = []
         try:
             self.appliance.load_context(await self.client.context(self.appliance))
         except (aiohttp.ClientError, TimeoutError, HonError) as err:
             raise UpdateFailed(f"{self.name}: {err}") from err
+        finally:
+            # They may be newer than the context: they go on top of it, or of
+            # the old state if it did not come.
+            held, self._held = self._held, None
+            for topic, payload in held:
+                self.appliance.load_event(topic, payload)
         return self.appliance.parameters
 
     @property

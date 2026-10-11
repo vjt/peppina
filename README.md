@@ -35,8 +35,10 @@ logs in by itself, and gives you a stop button that works.
 
 ## What you get
 
-Peppina polls every appliance that supports both `startProgram` and
-`stopProgram` once a minute. For each one it adds a device with:
+Peppina follows every appliance that supports both `startProgram` and
+`stopProgram`: hOn pushes each change as it happens, and Peppina falls back to
+asking once a minute whenever the push is down (see [docs/mqtt.md](docs/mqtt.md)).
+For each one it adds a device with:
 
 | Entity | What it does |
 |---|---|

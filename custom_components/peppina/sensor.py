@@ -20,6 +20,7 @@ from homeassistant.const import REVOLUTIONS_PER_MINUTE, UnitOfTemperature, UnitO
 from . import DOMAIN
 from .entity import PeppinaEntity
 from .hon import WASH_DRYER, WASHING_MACHINE, Appliance
+from .hon.programs import running_program
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -66,7 +67,7 @@ SENSORS = (
         key="program_name",
         name="Program name",
         icon="mdi:playlist-play",
-        value=lambda a: a.program_name or "No program",
+        value=lambda a: running_program(a) or "No program",
     ),
     PeppinaSensorDescription(
         key="remaining_time",

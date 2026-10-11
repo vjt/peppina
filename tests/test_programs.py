@@ -5,7 +5,8 @@ from pathlib import Path
 import pytest
 
 from hon import Appliance
-from hon.programs import describe, dictionary_keys, extract, usage
+from hon.appliance import Parameter
+from hon.programs import describe, dictionary_keys, extract, running_program, usage
 
 FIXTURES = Path(__file__).parent / "fixtures"
 COMMANDS = json.loads((FIXTURES / "commands.json").read_text())
@@ -211,3 +212,65 @@ def test_knob_program_by_prefix_when_no_family_says():
         {"hqd_duvet": program(families=("hidden",)), "iot_wash_jackets": program()}, program2="1"
     )
     assert usage(appliance, {}) == {"hqd_duvet": 1, "iot_wash_jackets": 0}
+
+
+RUNNING = json.loads((FIXTURES / "context_running.json").read_text())
+
+
+def running(appliance, context=None, **shadow):
+    appliance.context = json.loads(json.dumps(context if context is not None else RUNNING))
+    del appliance.context["shadow"]
+    appliance.parameters = {**RUNNING["shadow"], **shadow}
+    return appliance
+
+
+def test_running_program_from_the_start_command(washer):
+    # Live, 2026-10-11: no programName anywhere, Peppina's own "program" parameter.
+    assert running_program(running(washer)) == "hqd_synthetic_and_coloured"
+
+
+def test_running_program_from_hon_name(washer):
+    context = json.loads(json.dumps(RUNNING))
+    context["commandHistory"]["command"]["programName"] = "PROGRAMS.WM_WD.IOT_WASH_WINE_STAINS"
+    assert running_program(running(washer, context)) == "iot_wash_wine_stains"
+
+
+def test_running_program_only_while_a_cycle_is_on(washer):
+    assert running_program(running(washer, machMode="1")) is None
+    assert running_program(running(washer, machMode="7")) is None
+    assert running_program(running(washer, machMode="3")) == "hqd_synthetic_and_coloured"
+
+
+def test_cycle_from_the_knob(washer):
+    # The last command started an older cycle: this one came from the knob.
+    context = json.loads(json.dumps(RUNNING))
+    context["activity"]["activityStarted"] = "2026-10-11T15:00:00Z"
+    assert running_program(running(washer, context, prCode="136")) == "hqd_eco_40_60_degrees"
+    # Same if hOn has no activity, or the code changed since the command.
+    del context["activity"]
+    assert running_program(running(washer, context, prCode="136")) == "hqd_eco_40_60_degrees"
+    assert running_program(running(washer, None, prCode="136")) == "hqd_eco_40_60_degrees"
+
+
+def test_start_command_without_program_matches_fixed_values():
+    appliance = appliance_with(
+        {
+            # On position 8, like the live command.
+            "hqd_one": program(families=("dashboard",), position="8"),
+            "iot_wash_two": program(position="8"),
+        }
+    )
+    for key, rinse in (("hqd_one", "2"), ("iot_wash_two", "3")):
+        appliance.start_command(key).parameters["rinseIterations"] = Parameter(
+            {"typology": "fixed", "fixedValue": rinse}
+        )
+        appliance.start_command(key).parameters["prCode"] = Parameter(
+            {"typology": "fixed", "fixedValue": "116"}
+        )
+    context = json.loads(json.dumps(RUNNING))
+    sent = context["commandHistory"]["command"]["parameters"]
+    del sent["program"]
+    sent["rinseIterations"] = "3"
+    assert running_program(running(appliance, context)) == "iot_wash_two"
+    sent["rinseIterations"] = "9"  # fits neither: better nothing than a guess
+    assert running_program(running(appliance, context)) is None

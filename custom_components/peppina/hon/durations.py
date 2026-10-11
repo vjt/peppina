@@ -13,24 +13,11 @@ import time
 from typing import Callable
 
 from .appliance import Appliance
-from .programs import knob
+from .programs import knob, program_codes
 
 READY, RUNNING, PAUSED, ERROR = "1", "2", "3", "6"
 # A start Peppina sent explains a cycle that starts within this many seconds.
 SENT_FOR = 600
-
-
-def program_codes(appliance: Appliance, code: object, position: object = None) -> list[str]:
-    """Programs with this program code (and knob position, if given)."""
-    found = []
-    for program in appliance.programs:
-        command = appliance.start_command(program)
-        param = command.parameters.get("prCode")
-        if param is None or param.typology != "fixed" or str(param.default) != str(code):
-            continue
-        if position is None or str(position) in command.info("prPosition"):
-            found.append(program)
-    return found
 
 
 def activity_duration(appliance: Appliance, activity: dict) -> dict | None:

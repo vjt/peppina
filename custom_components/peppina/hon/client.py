@@ -211,6 +211,9 @@ class HonClient:
             "parameters": parameters,
             "applianceType": appliance.type_name,
         }
+        if command.program is not None:
+            # As the hOn app sends it; without it hOn keeps no program name.
+            body["programName"] = command.key.upper()
         _LOGGER.debug("Sending %s", body)
         data = await self._request("POST", "/commands/v1/send", json=body)
         if (data.get("payload") or {}).get("resultCode") == "0":

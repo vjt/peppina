@@ -85,6 +85,8 @@ purpose, and it is the best part.
   <img src="docs/images/dashboard.jpg" alt="The Peppina dashboard: the washer drawn in SVG, with program, start, stop and schedule controls" width="300">
 </p>
 
+<p align="center"><a href="docs/images/spin.mp4">See it spin (video, 4 s)</a></p>
+
 ### What you can build on it
 
 Once start, stop and the delayed start are plain entities, the rest is

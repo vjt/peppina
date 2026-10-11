@@ -50,13 +50,24 @@ def test_topics(washer):
 
 
 def test_status_events_chain(washer):
+    # A whole cycle as hOn sent it: no gaps, the context wanted only when
+    # the mode changes.
     events = status_events()
     assert len(events) >= 2
     washer.parameters = {c["parName"]: c["parOldVal"] for c in events[0]["parameters"]}
     for event in events:
-        assert washer.load_event(STATUS, event)
+        mode = any(c["parName"] == "machMode" for c in event["parameters"])
+        assert washer.load_event(STATUS, event) is not mode
     for change in events[-1]["parameters"]:
         assert washer.get(change["parName"]) == change["parNewVal"]
+
+
+def test_end_of_cycle(washer):
+    end = next(e for e in status_events() if any(c["parName"] == "machMode" for c in e["parameters"]))
+    washer.parameters.update(remoteCtrValid="1", machMode="2")
+    washer.load_event(STATUS, end)
+    assert washer.get("remoteCtrValid") == "0"
+    assert washer.get("machMode") == "7"
 
 
 def test_missed_status_event(washer):

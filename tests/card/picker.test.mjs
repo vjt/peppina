@@ -44,8 +44,26 @@ test("the field replaces the native select and describes the program", () => {
   assert.equal(t.$("select.program"), null);
   assert.equal(t.$(".pname").textContent, "Smart A.I.");
   assert.match(t.$(".pdesc").textContent, /Intelligenza Artificiale/);
-  assert.deepEqual(t.$$(".pchips .chip").map((c) => c.textContent), ["max 9 kg", "freddo–60°C", "1200 giri"]);
+  assert.deepEqual(t.$$(".pchips .chip").map((c) => c.textContent),
+    ["≈ 1 h 21 min", "max 9 kg", "freddo–60°C", "1200 giri"]);
+  assert.equal(t.$(".pnote").textContent, "Stima della macchina, a 40°C e 1200 giri");
   assert.equal(t.sheetOpen(), false);
+});
+
+test("the duration sits next to each program that has one, and nowhere else", () => {
+  const t = mount();
+  t.$(".field").click();
+  const meta = (key) => t.$(`.prow[data-key="${key}"] .pmeta`)?.textContent;
+  assert.equal(meta("hqd_smart"), "1 h 21 min · 192×");
+  assert.equal(meta("hqd_eco_40_60_degrees"), "2 h 50 min · 38×");
+  assert.equal(meta("hqd_cottons"), "4×");
+  assert.equal(meta("hqd_quick_15"), "max 1,8 kg");
+});
+
+test("a program without an estimate shows no duration", () => {
+  const t = mount({ state: "hqd_cottons" });
+  assert.ok(!t.$$(".pchips .chip").some((c) => c.textContent.startsWith("≈")));
+  assert.equal(t.$(".pnote").textContent, "");
 });
 
 test("the sheet opens with the most used first, then hOn's groups", () => {
@@ -57,7 +75,7 @@ test("the sheet opens with the most used first, then hOn's groups", () => {
   assert.deepEqual(t.headers(), ["Più usati", "Tradizionali", "Rapidi", "Eco", "Delicati", "Macchie",
     "Salute", "Casa", "Sport", "Baby", "Pets", "Ariel", "Dash", "Business", "Altri"]);
   assert.equal(t.rows().length, 92 + 5);
-  assert.equal(t.rows()[0].querySelector(".pmeta").textContent, "192×");
+  assert.equal(t.rows()[0].querySelector(".pmeta").textContent, "1 h 21 min · 192×");
   assert.ok(t.rows()[0].classList.contains("sel"));
 });
 

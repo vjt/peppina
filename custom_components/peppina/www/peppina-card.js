@@ -45,6 +45,20 @@ const STRINGS = {
   },
   spin: (rpm) => `${rpm} giri`,
   times: (n) => `${n}×`,
+  duration: (minutes) => {
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return h ? `${h} h${m ? ` ${m} min` : ""}` : `${m} min`;
+  },
+  // The machine's own estimate, at the settings it was made for.
+  estimate: ({ minutes }) => `≈ ${STRINGS.duration(minutes)}`,
+  estimateNote: ({ temp, spin }) => {
+    const at = [
+      temp != null && (Number(temp) === 0 ? "a freddo" : `a ${temp}°C`),
+      spin != null && (Number(spin) === 0 ? "senza centrifuga" : `${spin} giri`),
+    ].filter(Boolean);
+    return `Stima della macchina${at.length ? `, ${at.join(" e ")}` : ""}`;
+  },
 };
 const MOST_USED = 5;
 
@@ -57,6 +71,7 @@ const el = (tag, cls, text) => {
 const fold = (text) => text.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
 const tagged = (p) => (p.tag ? `${p.name} · ${STRINGS.tags[p.tag] || p.tag}` : p.name);
 const facts = (p) => [
+  p.duration && STRINGS.estimate(p.duration),
   p.load && STRINGS.load(p.load),
   p.temp && STRINGS.temp(p.temp),
   p.spin && STRINGS.spin(p.spin),
@@ -70,7 +85,8 @@ class ProgramPicker {
     const $ = (sel) => root.querySelector(sel);
     this.$ = {
       box: $(".programbox"), field: $(".field"), name: $(".pname"), desc: $(".pdesc"),
-      chips: $(".pchips"), sheet: $(".sheet"), search: $(".search"), list: $(".list"),
+      chips: $(".pchips"), note: $(".pnote"), sheet: $(".sheet"), search: $(".search"),
+      list: $(".list"),
     };
     this._onPick = onPick;
     this._programs = [];
@@ -110,6 +126,7 @@ class ProgramPicker {
     this.$.name.textContent = p ? tagged(p) : prettyProgram(sel.state || "");
     this.$.desc.textContent = (p && p.description) || "";
     this.$.chips.replaceChildren(...(p ? facts(p) : []).map((t) => el("span", "chip", t)));
+    this.$.note.textContent = p && p.duration ? STRINGS.estimateNote(p.duration) : "";
     if (this.isOpen) this._render();
   }
 
@@ -165,7 +182,10 @@ class ProgramPicker {
     const head = el("span", "ptop");
     head.append(el("span", "pn", p.name));
     if (p.tag) head.append(el("span", "ptag", STRINGS.tags[p.tag] || p.tag));
-    const meta = p.usage > 0 ? STRINGS.times(p.usage) : p.load ? STRINGS.load(p.load) : "";
+    const meta = [
+      p.duration && STRINGS.duration(p.duration.minutes),
+      p.usage > 0 ? STRINGS.times(p.usage) : !p.duration && p.load && STRINGS.load(p.load),
+    ].filter(Boolean).join(" · ");
     if (meta) head.append(el("span", "pmeta", meta));
     row.append(head);
     if (p.description) row.append(el("span", "pd", p.description));
@@ -300,6 +320,8 @@ const STYLE = `
   .pdesc:empty { display: none; }
   .pchips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
   .pchips .chip { padding: 3px 9px; font-size: 0.8em; }
+  .pnote { font-size: 0.75em; opacity: 0.6; margin-top: 4px; }
+  .pnote:empty { display: none; }
   .sheet {
     position: fixed; inset: 0; z-index: 10;
     display: flex; align-items: flex-end; justify-content: center;
@@ -519,6 +541,7 @@ class PeppinaCard extends HTMLElement {
               <button class="field" type="button"><span class="pname"></span><span class="caret">▾</span></button>
               <div class="pdesc"></div>
               <div class="pchips"></div>
+              <div class="pnote"></div>
             </div>
           </div>
           <div class="row">

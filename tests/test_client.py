@@ -107,7 +107,7 @@ def test_last_activity():
 
     client._request = request
     answer = {"macAddress": "aa-bb-cc-dd-ee-ff", "attributes": {"prCode": "124", "remainingTimeMM": "81"}}
-    assert asyncio.run(client.last_activity(appliance)) == {"prCode": "124", "remainingTimeMM": "81"}
+    assert asyncio.run(client.last_activity(appliance)) == answer
     answer = {}
     assert asyncio.run(client.last_activity(appliance)) == {}
 

@@ -172,12 +172,13 @@ class HonClient:
         return payload
 
     async def last_activity(self, appliance: Appliance) -> dict:
-        """What hOn kept of the appliance's last cycle: program code, knob
-        position, settings, remainingTimeMM at its start; {} if nothing."""
+        """What hOn kept of the appliance's last cycle: activityStarted,
+        activityEnded and attributes (program code, knob position, settings,
+        remainingTimeMM at its start); {} if nothing."""
         data = await self._request(
             "GET", "/commands/v1/retrieve-last-activity", params={"macAddress": appliance.mac}
         )
-        return (data or {}).get("attributes") or {}
+        return data or {}
 
     async def context(self, appliance: Appliance) -> dict:
         params = {

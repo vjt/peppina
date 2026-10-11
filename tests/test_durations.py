@@ -99,12 +99,36 @@ def test_resume_and_restart_mid_cycle_are_not_starts(washer, watch):
 
 
 def test_last_activity(washer):
-    # retrieve-last-activity on 2026-10-11: the Smart cycle, 81' at its start.
-    activity = {"prCode": "124", "prPosition": "1", "remainingTimeMM": "81", "temp": "40",
-                "spinSpeed": "1200"}
+    # retrieve-last-activity on 2026-10-11: the Smart cycle, 81' at its start,
+    # 81.5 in fact (08:55:19 to 10:16:46).
+    attributes = {"prCode": "124", "prPosition": "1", "remainingTimeMM": "81", "temp": "40",
+                  "spinSpeed": "1200"}
+    activity = {"attributes": attributes, "activityStarted": "2026-10-11T08:55:19Z",
+                "activityEnded": "2026-10-11T10:16:46Z"}
     assert activity_duration(washer, activity) == {
-        "program": "hqd_smart", "minutes": 81, "temp": "40", "spin": "1200",
+        "program": "hqd_smart", "minutes": 81, "actual": 81, "temp": "40", "spin": "1200",
     }
-    assert activity_duration(washer, {**activity, "prCode": "115", "prPosition": "7"}) is None
-    assert activity_duration(washer, {**activity, "remainingTimeMM": "0"}) is None
+    no_end = {"attributes": attributes, "activityStarted": "2026-10-11T08:55:19Z"}
+    assert "actual" not in activity_duration(washer, no_end)
+    other = {**activity, "attributes": {**attributes, "prCode": "115", "prPosition": "7"}}
+    assert activity_duration(washer, other) is None
     assert activity_duration(washer, {}) is None
+
+
+def test_real_duration_at_the_end(washer, clock):
+    from datetime import datetime, timezone
+
+    end = datetime(2026, 10, 11, 10, 16, 46, tzinfo=timezone.utc)
+    watch = DurationWatch(clock, now=lambda: end)
+    washer.context = {"activity": {"activityStarted": "2026-10-11T08:55:19Z"}}
+    watch.observe(shadow(washer, machMode="1", prCode="124", remainingTimeMM="81"))
+    watch.observe(shadow(washer, machMode="2", prCode="124", remainingTimeMM="81"))
+    watch.observe(shadow(washer, machMode="2", prCode="124", remainingTimeMM="3"))
+    seen = watch.observe(shadow(washer, machMode="7", prCode="124", remainingTimeMM="0"))
+    assert seen == {"program": "hqd_smart", "actual": 81, "temp": "40", "spin": "1400"}
+    # Ending again without a cycle in between says nothing.
+    assert watch.observe(shadow(washer, machMode="7", prCode="124")) is None
+    # A cycle whose activity hOn did not report has no real duration.
+    washer.context = {}
+    watch.observe(shadow(washer, machMode="2", prCode="124", remainingTimeMM="50"))
+    assert watch.observe(shadow(washer, machMode="7", prCode="124")) is None

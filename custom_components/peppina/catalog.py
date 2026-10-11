@@ -78,8 +78,9 @@ class Usage:
 
 
 class Durations:
-    """The machine's last estimate of each program's duration, per appliance,
-    kept in .storage: {minutes, temp, spin} (see hon/durations.py)."""
+    """Per appliance and program, kept in .storage (see hon/durations.py):
+    the machine's last estimate (minutes), how long the last cycle really
+    took (actual), and the temperature and spin they are for."""
 
     def __init__(self, hass: HomeAssistant) -> None:
         self._store = Store(hass, 1, "peppina.durations")
@@ -92,11 +93,13 @@ class Durations:
         return self._data.get(mac, {})
 
     def keep(self, mac: str, reading: dict) -> bool:
-        """Keep a reading {program, minutes, temp, spin}; False if already kept."""
+        """Merge a reading {program, minutes and/or actual, temp, spin};
+        False if it changed nothing."""
         programs = self._data.setdefault(mac, {})
-        value = {key: reading[key] for key in ("minutes", "temp", "spin")}
-        if programs.get(reading["program"]) == value:
+        old = programs.get(reading["program"], {})
+        new = {**old, **{k: reading[k] for k in ("minutes", "actual", "temp", "spin") if k in reading}}
+        if new == old:
             return False
-        programs[reading["program"]] = value
+        programs[reading["program"]] = new
         self._store.async_delay_save(lambda: self._data, 10)
         return True

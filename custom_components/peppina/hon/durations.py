@@ -10,28 +10,35 @@ reported 170 for Eco 40-60; the Smart cycle of that morning was estimated at
 from __future__ import annotations
 
 import time
+from datetime import datetime, timezone
 from typing import Callable
 
 from .appliance import Appliance
-from .programs import knob, program_codes
+from .programs import knob, program_codes, running_program
 
-READY, RUNNING, PAUSED, ERROR = "1", "2", "3", "6"
+READY, RUNNING, PAUSED, ERROR, DONE = "1", "2", "3", "6", "7"
 # A start Peppina sent explains a cycle that starts within this many seconds.
 SENT_FOR = 600
 
 
 def activity_duration(appliance: Appliance, activity: dict) -> dict | None:
-    """The estimate retrieve-last-activity kept for the last cycle, when its
-    program code and knob position point at one program."""
-    found = program_codes(appliance, activity.get("prCode"), activity.get("prPosition"))
-    minutes = _minutes(activity.get("remainingTimeMM"))
-    if len(found) != 1 or not minutes:
+    """What retrieve-last-activity kept of the last cycle, when its program
+    code and knob position point at one program: the estimate at its start
+    and how long it really took (activityStarted to activityEnded)."""
+    attributes = activity.get("attributes") or {}
+    found = program_codes(appliance, attributes.get("prCode"), attributes.get("prPosition"))
+    reading = {
+        "minutes": _minutes(attributes.get("remainingTimeMM")),
+        "actual": _elapsed(activity.get("activityStarted"), _when(activity.get("activityEnded"))),
+    }
+    reading = {key: value for key, value in reading.items() if value}
+    if len(found) != 1 or not reading:
         return None
     return {
         "program": found[0],
-        "minutes": minutes,
-        "temp": activity.get("temp"),
-        "spin": activity.get("spinSpeed"),
+        **reading,
+        "temp": attributes.get("temp"),
+        "spin": attributes.get("spinSpeed"),
     }
 
 
@@ -44,11 +51,18 @@ class DurationWatch:
     or a first look at a cycle already running, is not a start.
     """
 
-    def __init__(self, clock: Callable[[], float] = time.monotonic) -> None:
+    def __init__(
+        self,
+        clock: Callable[[], float] = time.monotonic,
+        now: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
+    ) -> None:
         self._clock = clock
+        self._now = now
         self._mode: object = None
         self._sent: tuple[str, float] | None = None
         self._starting: str | None = None
+        # The cycle on, for how long it really took when it ends.
+        self._running: str | None = None
 
     def started(self, program: str) -> None:
         """Peppina sent a start for this program."""
@@ -60,6 +74,15 @@ class DurationWatch:
         code = appliance.get("prCode")
         minutes = _minutes(appliance.get("remainingTimeMM"))
         previous, self._mode = self._mode, mode
+        if mode in (RUNNING, PAUSED):
+            self._running = running_program(appliance) or self._running
+        if mode == DONE and previous in (RUNNING, PAUSED) and self._running:
+            program, self._running = self._running, None
+            # From the start of hOn's activity: Home Assistant may have
+            # restarted since the cycle began.
+            activity = appliance.context.get("activity") or {}
+            actual = _elapsed(activity.get("activityStarted"), self._now())
+            return _reading(appliance, program, actual, "actual") if actual else None
         if mode == READY:
             self._starting = None
             program = knob(appliance, program_codes(appliance, code))
@@ -81,13 +104,29 @@ class DurationWatch:
         return None
 
 
-def _reading(appliance: Appliance, program: str, minutes: int) -> dict:
+def _reading(appliance: Appliance, program: str, minutes: int, kind: str = "minutes") -> dict:
     return {
         "program": program,
-        "minutes": minutes,
+        kind: minutes,
         "temp": appliance.get("temp"),
         "spin": appliance.get("spinSpeed"),
     }
+
+
+def _when(value: object) -> datetime | None:
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _elapsed(start: object, end: datetime | None) -> int:
+    """Whole minutes from an hOn timestamp to end; 0 if unknown or absurd."""
+    begun = _when(start)
+    if begun is None or end is None:
+        return 0
+    minutes = round((end - begun).total_seconds() / 60)
+    return minutes if 0 < minutes < 24 * 60 else 0
 
 
 def _minutes(value: object) -> int:

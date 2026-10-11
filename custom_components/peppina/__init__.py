@@ -235,16 +235,19 @@ class Washer:
             self.durations.keep(self.mac, reading)
 
     async def async_seed_duration(self) -> None:
-        """The last cycle's estimate, for a program the machine has not shown
-        one for since."""
+        """What hOn kept of the last cycle (estimate, real duration), where
+        the machine has not told us since."""
         try:
             activity = await self.client.last_activity(self.appliance)
         except (aiohttp.ClientError, TimeoutError, HonError) as err:
             _LOGGER.debug("%s: no last activity from hOn (%s)", self.name, err)
             return
         reading = activity_duration(self.appliance, activity)
-        if reading and reading["program"] not in self.durations.get(self.mac):
-            self.durations.keep(self.mac, reading)
+        if not reading:
+            return
+        known = self.durations.get(self.mac).get(reading["program"], {})
+        missing = {k: v for k, v in reading.items() if k == "program" or k not in known}
+        if len(missing) > 1 and self.durations.keep(self.mac, missing):
             self._notify()
 
     @property

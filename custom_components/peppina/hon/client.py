@@ -59,12 +59,16 @@ class HonClient:
         )
         params = {"username": self._email, "password": self._password, "code_challenge": challenge}
         headers = {"User-Agent": USER_AGENT}
-        async with self._session.get(
-            f"{API_URL}/ciam/authorize", params=params, headers=headers
-        ) as resp:
-            if resp.status >= 500:
-                resp.raise_for_status()
-            session_id = (await resp.json()).get("session_id") if resp.status == 200 else None
+        try:
+            async with self._session.get(
+                f"{API_URL}/ciam/authorize", params=params, headers=headers
+            ) as resp:
+                if resp.status >= 500:
+                    raise HonError(f"/ciam/authorize answered HTTP {resp.status}")
+                session_id = (await resp.json()).get("session_id") if resp.status == 200 else None
+        except aiohttp.ClientResponseError as err:
+            # Its message carries the URL, and with it the credentials.
+            raise HonError(f"/ciam/authorize answered HTTP {err.status}") from None
         if not session_id:
             raise HonAuthError(f"no session id from /ciam/authorize (HTTP {resp.status})")
 

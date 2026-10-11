@@ -36,6 +36,7 @@ const STRINGS = {
   mostUsed: "Più usati",
   others: "Altri",
   noMatch: "Nessun programma trovato",
+  more: "Descrizione completa",
   tags: { guided: "guidato", care: "cura capi", download: "scaricato", featured: "in evidenza" },
   load: (kg) => `max ${kg.toLocaleString("it-IT")} kg`,
   temp: ([lo, hi]) => {
@@ -131,12 +132,30 @@ class ProgramPicker {
       this.$.list.scrollTop = 0;
       this._render();
     });
+    // The whole description, two lines until tapped.
+    this.$.desc.addEventListener("click", () => this.$.desc.classList.toggle("full"));
     this.$.list.addEventListener("click", (e) => {
+      const more = e.target.closest(".pexp");
+      if (more) {
+        const row = more.closest(".prow");
+        more.setAttribute("aria-expanded", String(row.classList.toggle("full")));
+        return;
+      }
       const row = e.target.closest(".prow");
-      if (!row) return;
-      this.close();
-      if (row.dataset.key !== this._value) this._onPick(row.dataset.key);
+      if (row) this._pick(row);
     });
+    this.$.list.addEventListener("keydown", (e) => {
+      const row = e.target.classList && e.target.classList.contains("prow") && e.target;
+      if (row && (e.key === "Enter" || e.key === " ")) {
+        e.preventDefault();
+        this._pick(row);
+      }
+    });
+  }
+
+  _pick(row) {
+    this.close();
+    if (row.dataset.key !== this._value) this._onPick(row.dataset.key);
   }
 
   // sel: the program select's state, a new object whenever it changes.
@@ -158,6 +177,7 @@ class ProgramPicker {
     const p = this._programs.find((x) => x.key === sel.state);
     this.$.name.textContent = p ? tagged(p) : prettyProgram(sel.state || "");
     this.$.desc.textContent = (p && p.description) || "";
+    this.$.desc.classList.remove("full");
     this.$.chips.replaceChildren(...(p ? facts(p) : []).map((t) => el("span", "chip", t)));
     this.$.note.textContent = p && p.duration ? STRINGS.estimateNote(p.duration) : "";
     if (this.isOpen) this._render();
@@ -232,8 +252,10 @@ class ProgramPicker {
   }
 
   _row(p) {
-    const row = el("button", p.key === this._value ? "prow sel" : "prow");
-    row.type = "button";
+    // Not a button: it holds the button that opens the whole description.
+    const row = el("div", p.key === this._value ? "prow sel" : "prow");
+    row.setAttribute("role", "button");
+    row.tabIndex = 0;
     row.dataset.key = p.key;
     const head = el("span", "ptop");
     head.append(el("span", "pn", p.name));
@@ -244,7 +266,15 @@ class ProgramPicker {
     ].filter(Boolean).join(" · ");
     if (meta) head.append(el("span", "pmeta", meta));
     row.append(head);
-    if (p.description) row.append(el("span", "pd", p.description));
+    if (p.description) {
+      const line = el("div", "pdline");
+      const more = el("button", "pexp", "▾");
+      more.type = "button";
+      more.setAttribute("aria-label", STRINGS.more);
+      more.setAttribute("aria-expanded", "false");
+      line.append(el("span", "pd", p.description), more);
+      row.append(line);
+    }
     return row;
   }
 }
@@ -374,6 +404,8 @@ const STYLE = `
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
   }
   .pdesc:empty { display: none; }
+  .pdesc { cursor: pointer; }
+  .pdesc.full { display: block; -webkit-line-clamp: unset; overflow: visible; }
   .pchips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
   .pchips .chip { padding: 3px 9px; font-size: 0.8em; }
   .pnote { font-size: 0.75em; opacity: 0.6; margin-top: 4px; }
@@ -407,8 +439,8 @@ const STYLE = `
     opacity: 0.55; padding: 14px 10px 4px;
   }
   .prow {
-    display: block; width: 100%; text-align: left; font-weight: normal;
-    background: none; border-radius: 12px; padding: 9px 10px;
+    display: block; box-sizing: border-box; width: 100%; text-align: left; cursor: pointer;
+    border-radius: 12px; padding: 9px 10px;
   }
   .prow:hover { background: var(--secondary-background-color, #eee); }
   .prow.sel { background: rgba(3, 169, 244, 0.14); }
@@ -419,10 +451,17 @@ const STYLE = `
     background: var(--secondary-background-color, #eee);
   }
   .pmeta { margin-left: auto; font-size: 0.8em; opacity: 0.6; white-space: nowrap; }
+  .pdline { display: flex; align-items: flex-start; gap: 4px; margin-top: 2px; }
   .pd {
-    display: block; font-size: 0.82em; opacity: 0.65; margin-top: 2px;
+    flex: 1; min-width: 0; font-size: 0.82em; opacity: 0.65;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
+  .prow.full .pd { white-space: normal; }
+  .pexp {
+    flex: none; padding: 0 6px; background: none; font-weight: normal; font-size: 0.8em;
+    opacity: 0.6; transition: transform 0.15s ease;
+  }
+  .prow.full .pexp { transform: rotate(180deg); }
   .empty { padding: 24px; text-align: center; opacity: 0.6; }
   .vprobe {
     position: fixed; top: 4px; left: 4px; z-index: 20; pointer-events: none;

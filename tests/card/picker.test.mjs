@@ -214,6 +214,30 @@ test("the viewport probe shows only when asked for", () => {
   assert.match(t.$(".vprobe").textContent, /visual 390×500/);
 });
 
+test("descriptions read whole: tap in the card, the arrow in the list", () => {
+  const t = mount();
+  const desc = t.$(".pdesc");
+  desc.click();
+  assert.ok(desc.classList.contains("full"));
+  desc.click();
+  assert.ok(!desc.classList.contains("full"));
+  t.$(".field").click();
+  const row = t.$('.prow[data-key="hqd_cottons"]');
+  row.querySelector(".pexp").click();
+  assert.ok(row.classList.contains("full"));
+  assert.equal(row.querySelector(".pexp").getAttribute("aria-expanded"), "true");
+  assert.equal(t.sheetOpen(), true);  // opening the description picks nothing
+  assert.equal(t.calls.length, 0);
+});
+
+test("a row picks with Enter too", () => {
+  const t = mount();
+  t.$(".field").click();
+  const row = t.$('.prow[data-key="hqd_cottons"]');
+  row.dispatchEvent(new t.window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  assert.equal(JSON.parse(JSON.stringify(t.calls))[0][2].option, "hqd_cottons");
+});
+
 test("without the programs attribute it falls back to the keys", () => {
   const t = mount({ withPrograms: false });
   assert.equal(t.$(".pname").textContent, "Smart");

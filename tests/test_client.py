@@ -94,3 +94,19 @@ def test_dictionary():
     client = HonClient(ConfigSession("it"), "user@example.com", "hunter2")
     data = asyncio.run(client.dictionary(URL))
     assert data["PROGRAMS"]["WM_WD"]["HQD_COTTONS"] == "Cotone"
+
+
+def test_last_activity():
+    client = HonClient(None, "user@example.com", "hunter2")
+    appliance = type("A", (), {"mac": "aa-bb-cc-dd-ee-ff"})()
+
+    async def request(method, path, **kwargs):
+        assert (method, path) == ("GET", "/commands/v1/retrieve-last-activity")
+        assert kwargs["params"] == {"macAddress": "aa-bb-cc-dd-ee-ff"}
+        return answer
+
+    client._request = request
+    answer = {"macAddress": "aa-bb-cc-dd-ee-ff", "attributes": {"prCode": "124", "remainingTimeMM": "81"}}
+    assert asyncio.run(client.last_activity(appliance)) == {"prCode": "124", "remainingTimeMM": "81"}
+    answer = {}
+    assert asyncio.run(client.last_activity(appliance)) == {}

@@ -70,13 +70,13 @@ def usage(appliance: Appliance, own: dict[str, int]) -> dict[str, int]:
             counted = int(float(appliance.get(f"program{position}") or 0))
         except (TypeError, ValueError):
             continue
-        if knob := _knob(appliance, programs):
-            result[knob] += max(0, counted - sum(own.get(p, 0) for p in programs))
+        if owner := knob(appliance, programs):
+            result[owner] += max(0, counted - sum(own.get(p, 0) for p in programs))
     return result
 
 
-def _knob(appliance: Appliance, programs: list[str]) -> str | None:
-    """The position's program printed on the knob: hOn's dashboard family,
+def knob(appliance: Appliance, programs: list[str]) -> str | None:
+    """Which of these programs is printed on the knob: hOn's dashboard family,
     else the one hqd_ program; None when that is not one program."""
     for found in (
         [p for p in programs if "dashboard" in appliance.start_command(p).info("programFamily")],
@@ -87,8 +87,18 @@ def _knob(appliance: Appliance, programs: list[str]) -> str | None:
     return None
 
 
-def describe(appliance: Appliance, texts: dict[str, str], own: dict[str, int]) -> list[dict]:
-    """Every program for the card, by group then by name."""
+def describe(
+    appliance: Appliance,
+    texts: dict[str, str],
+    own: dict[str, int],
+    durations: dict[str, dict] | None = None,
+) -> list[dict]:
+    """Every program for the card, by group then by name.
+
+    durations: the machine's last estimate per program (see durations.py),
+    {minutes, temp, spin}; a program it never estimated gets None.
+    """
+    durations = durations or {}
     counts = usage(appliance, own)
     programs, families = [], {}
     for program in appliance.programs:
@@ -110,6 +120,7 @@ def describe(appliance: Appliance, texts: dict[str, str], own: dict[str, int]) -
                 "temp": [temps[0], temps[-1]] if temps else None,
                 "spin": spins[-1] if spins else None,
                 "usage": counts[program],
+                "duration": durations.get(program),
             }
         )
         families[program] = command.info("programFamily")

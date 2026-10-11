@@ -90,7 +90,15 @@ def test_describe(washer, texts):
         "temp": [0, 90],
         "spin": 1400,
         "usage": 4,
+        "duration": None,
     }
+
+
+def test_describe_durations(washer, texts):
+    measured = {"hqd_eco_40_60_degrees": {"minutes": 170, "temp": "40", "spin": "1400"}}
+    programs = {p["key"]: p for p in describe(washer, texts, {}, measured)}
+    assert programs["hqd_eco_40_60_degrees"]["duration"] == {"minutes": 170, "temp": "40", "spin": "1400"}
+    assert programs["hqd_cottons"]["duration"] is None  # never estimated: nothing
 
 
 def test_describe_order(washer, texts):

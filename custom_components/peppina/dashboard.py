@@ -25,6 +25,9 @@ ICON = "mdi:washing-machine"
 CARD_URL = "/peppina/peppina-card.js"
 CARD_FILE = Path(__file__).parent / "www" / "peppina-card.js"
 
+# Card keys Peppina writes; anything else on the card is the user's.
+OWN_KEYS = ("type", "name", "entities")
+
 # Card role -> tail of our unique_id (after the mac).
 ROLES = {
     "status": "status",
@@ -74,9 +77,10 @@ async def async_save_dashboard(hass: HomeAssistant) -> None:
         _LOGGER.exception("Dashboard setup failed, Lovelace internals may have changed")
 
 
-async def _added_by_hand(storage) -> dict[str, dict[str, str]]:
-    """Card roles outside ROLES, by view title: entities of the user's own
-    (say automation.x as "auto"), which a rewrite must not drop."""
+async def _added_by_hand(storage) -> dict[str, tuple[dict, dict]]:
+    """What the user added to each card, by view title: roles outside ROLES
+    (say automation.x as "auto") and card options (say auto_after), which a
+    rewrite must not drop."""
     from homeassistant.components.lovelace.dashboard import ConfigNotFound
 
     try:
@@ -88,7 +92,8 @@ async def _added_by_hand(storage) -> dict[str, dict[str, str]]:
         for card in view.get("cards", []):
             if card.get("type") == "custom:peppina-card":
                 extra = {k: v for k, v in card.get("entities", {}).items() if k not in ROLES}
-                kept[view.get("title")] = extra
+                options = {k: v for k, v in card.items() if k not in OWN_KEYS}
+                kept[view.get("title")] = (extra, options)
     return kept
 
 
@@ -117,7 +122,8 @@ async def _save(hass: HomeAssistant, washers: list) -> None:
     views = []
     kept = await _added_by_hand(storage)
     for washer in washers:
-        entities = dict(kept.get(washer.name, {}))
+        extra, options = kept.get(washer.name, ({}, {}))
+        entities = dict(extra)
         for role, key in ROLES.items():
             unique_id = f"{DOMAIN}_{washer.mac}_{key}"
             for domain in PLATFORMS:
@@ -131,7 +137,12 @@ async def _save(hass: HomeAssistant, washers: list) -> None:
                 "icon": ICON,
                 "type": "panel",
                 "cards": [
-                    {"type": "custom:peppina-card", "name": washer.name, "entities": entities}
+                    {
+                        **options,
+                        "type": "custom:peppina-card",
+                        "name": washer.name,
+                        "entities": entities,
+                    }
                 ],
             }
         )

@@ -244,6 +244,10 @@ class PeppinaCard extends HTMLElement {
     return 12;
   }
 
+  disconnectedCallback() {
+    clearTimeout(this._tick);
+  }
+
   set hass(hass) {
     this._hass = hass;
     if (!this._built) this._build();
@@ -438,13 +442,24 @@ class PeppinaCard extends HTMLElement {
 
     // Optional roles of the user's own: "auto" is whatever schedules loads
     // (an automation, a switch), "watch" whatever waits to see them start.
+    // `auto_after` (minutes) is how long remote control must stay on before
+    // "auto" acts: until then the card counts down.
     const auto = this._val("auto");
     this.$.auto.classList.toggle("hidden", !auto);
+    clearTimeout(this._tick);
     if (auto) {
-      const watch = this._val("watch") === "on";
-      this.$.autostate.textContent = auto !== "on" ? "Spento"
-        : watch ? (delayed ? `Attivo, controllo l'avvio delle ${hhmm(delayed)}` : "Attivo, controllo l'avvio")
-        : "Attivo";
+      const remoteSince = remote ? new Date(this._state("remote").last_changed) : undefined;
+      const left = remoteSince && on && !running && !paused && !delayed
+        ? remoteSince.getTime() + (this._config.auto_after || 0) * 60000 - Date.now()
+        : 0;
+      let text = "Attivo";
+      if (auto !== "on") text = "Spento";
+      else if (left > 0) {
+        const sec = Math.ceil(left / 1000);
+        text = `Avvio in ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+        this._tick = setTimeout(() => this._update(), 1000);
+      } else if (delayed) text = `Avvio alle ${hhmm(delayed)}`;
+      this.$.autostate.textContent = text;
       this.$.autotoggle.textContent = auto === "on" ? "Spegni" : "Accendi";
     }
 

@@ -63,7 +63,10 @@ The card also takes two roles of your own, added by hand to its `entities`
 in the dashboard's raw configuration and kept when Peppina rewrites the page:
 `auto`, whatever schedules loads for you (an automation or a switch; the card
 shows it on or off and toggles it), and `watch`, an `input_boolean` that is on
-while something waits to see a scheduled start happen.
+while something waits to see a scheduled start happen. With `auto_after`
+(minutes, a card option next to `entities`) the card counts down the wait
+between remote control switched on and `auto` acting, say `auto_after: 2`
+for an automation with `for: {minutes: 2}`.
 
 The status entities use the same ids and states as the hon integration's, so
 their history and the automations built on them carry over when you switch.

@@ -61,7 +61,7 @@ const STRINGS = {
     return `Stima della macchina${at.length ? `, ${at.join(" e ")}` : ""}`;
   },
 };
-const MOST_USED = 5;
+const MOST_USED = 10;
 
 const el = (tag, cls, text) => {
   const node = document.createElement(tag);

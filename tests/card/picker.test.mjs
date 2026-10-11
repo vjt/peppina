@@ -78,7 +78,9 @@ test("the sheet opens with the most used first, then hOn's groups", () => {
   assert.deepEqual(names, ["Smart A.I.", "Eco 40-60", "Baby Care", "Cotone", "Sintetici"]);
   assert.deepEqual(t.headers(), ["Più usati", "Tradizionali", "Rapidi", "Eco", "Delicati", "Macchie",
     "Salute", "Casa", "Sport", "Baby", "Pets", "Ariel", "Dash", "Business", "Altri"]);
-  assert.equal(t.rows().length, 92 + 5);
+  const used = programs.filter((p) => p.usage > 0).length;
+  assert.equal(t.headers()[0], "Più usati");
+  assert.equal(t.rows().length, 92 + Math.min(10, used));  // up to ten most used
   assert.equal(t.rows()[0].querySelector(".pmeta").textContent, "1 h 21 min · 192×");
   assert.ok(t.rows()[0].classList.contains("sel"));
 });

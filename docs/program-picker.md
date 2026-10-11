@@ -74,7 +74,7 @@ scrolling past ones you never use.
 - **The sheet**: a tap opens it, from the bottom on narrow screens, centered on
   wide ones.
   - **Search**: on name and description, case and accents ignored.
-  - **Most used**: up to 5 programs with usage above 0, most used first.
+  - **Most used**: up to 10 programs with usage above 0, most used first.
   - **Groups**: then one group per cluster, in a fixed order (Tradizionali,
     Rapidi, Eco, Delicati, Macchie, Salute, Casa, Sport, Baby, Pets, Ariel,
     Dash, Business; clusters not in this list follow, by label; programs

@@ -93,10 +93,48 @@ scrolling past ones you never use.
 - **Strings**: the card's new strings go in one table, Italian for now (see
   below).
 
-## Not in this change
+## Duration (added after 0.5.0)
 
-- **Total duration**: hOn does not give it. `mainWashTime` is the main wash
-  only.
+vjt asked for each program's estimated duration, taken from hOn and never
+made up.
+
+- **No static duration anywhere in hOn**, checked on 2026-10-11:
+  - the command tree has only `mainWashTime` (the main wash: 3 minutes for
+    Express 15'), `rinseIterationTime`, `dryTime`, `delayTime`;
+  - the dictionary has no duration keys;
+  - `appliance-model` comes back empty;
+  - `statistics`, `maintenance-cycle` and `program-list-rules` have none;
+  - `history` and `favourite` hold only the parameters that were sent.
+- **The machine's own estimate exists**, as `remainingTimeMM`, at three
+  moments:
+  - **Idle**, for the program on its knob. Ready again after the cycle of
+    2026-10-11, it showed prCode 136 (Eco 40-60) and 170 minutes.
+  - **When a cycle starts**, for that cycle.
+  - **In `retrieve-last-activity`**, for the last cycle: the Smart cycle of
+    that morning, 81 minutes at its start. It took 81.5 (activityStarted
+    08:55:19Z, activityEnded 10:16:46Z).
+- **What Peppina does with them** (`hon/durations.py`):
+  - It reads them off every update, pushed or polled: idle, for the knob
+    program of the current program code; at a start (not a resume, not a
+    first look at a cycle already running), for the program Peppina just
+    sent, or the only program with that code, once the machine shows it.
+  - At setup it takes the last cycle's estimate from
+    `retrieve-last-activity`, for a program that has none yet.
+  - It keeps the last estimate per program, with the temperature and spin
+    it was made for, in `.storage/peppina.durations`. 0.5.0's
+    `peppina.usage` is untouched.
+- **In the card:**
+  - The picker shows the estimate next to each program that has one
+    (`1 h 21 min · 192×`).
+  - The selected program gets a `≈ 1 h 21 min` chip, and a line saying it
+    is the machine's estimate and at which temperature and spin.
+  - A program the machine never estimated shows no duration.
+- **Not measured:**
+  - The value at the very start of a cycle, seen live: the cycles watched
+    so far were already running.
+  - Idle estimates for programs other than Eco 40-60.
+
+## Not in this change
 - **The card in other languages**: program names, descriptions and groups
   already follow Home Assistant's language, through the dictionary. The rest
   of the card is still Italian. The new strings sit in one table, so

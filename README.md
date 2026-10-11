@@ -49,7 +49,7 @@ For each one it adds a device with:
 | `sensor.peppina_temperature` / `sensor.peppina_spin_speed` | settings of the running program |
 | `binary_sensor.peppina_door_status` / `binary_sensor.peppina_remote_control` | door open, remote control enabled |
 | `sensor.peppina_error` | hOn error code (`00` = none) |
-| `select.<name>_programma` | pick the program to run (remembered across restarts; defaults to the first one). The card shows hOn's own names and descriptions in Home Assistant's language, grouped as in the hOn app, the most used first |
+| `select.<name>_programma` | pick the program to run (remembered across restarts; defaults to the first one). The card shows hOn's own names and descriptions in Home Assistant's language, grouped as in the hOn app, the most used first, with the machine's own duration estimate once it has given one |
 | `select.<name>_temperatura` | temperature for the next start, from what the program allows; your pick is remembered across programs and restarts, and a program that does not allow it uses its own value |
 | `select.<name>_centrifuga` | spin speed for the next start, same rules as the temperature |
 | `button.<name>_avvia` | start the selected program now |

@@ -127,9 +127,11 @@ which Home Assistant shows from 2026.3 on.
 
 ## Known issues
 
-- `sensor.peppina_program_name` can show "No program" while a cycle started
-  from Peppina is running: hOn does not report the program name, and the
-  numeric program code it does report is shared by several programs.
+- `sensor.peppina_program_name` names the running program from the command
+  that started the cycle (hOn keeps no program name for it). For a cycle
+  started on the knob after a remote start of a program with the same
+  numeric code, it may name the remote one. When the command fits several
+  programs it says "No program" rather than guess.
 
 ## License
 

@@ -23,9 +23,12 @@ function mount({ withPrograms = true, state = "hqd_smart", options } = {}) {
     "sensor.m": { state: "1", attributes: {} },
     "binary_sensor.r": { state: "on", attributes: {}, last_changed: new Date().toISOString() },
     "select.p": { state, attributes: { options: options || programs.map((p) => p.key), ...(withPrograms ? { programs } : {}) } },
+    "sensor.program": { state: "No program", attributes: {} },
+    "sensor.end": { state: "unknown", attributes: {} },
   };
   const card = window.document.createElement("peppina-card");
-  card.setConfig({ entities: { status: "binary_sensor.s", mode: "sensor.m", remote: "binary_sensor.r", select: "select.p" } });
+  card.setConfig({ entities: { status: "binary_sensor.s", mode: "sensor.m", remote: "binary_sensor.r", select: "select.p",
+    program: "sensor.program", end: "sensor.end" } });
   window.document.body.appendChild(card);
   const hass = () => ({ states: { ...states }, callService: (d, s, data) => calls.push([d, s, data]) });
   card.hass = hass();
@@ -156,6 +159,25 @@ test("unavailable, the field keeps the program and turns off", () => {
   assert.equal(t.$(".pname").textContent, "Smart A.I.");
   assert.equal(t.$(".field").disabled, true);
   assert.equal(t.sheetOpen(), false);
+});
+
+test("while washing, the card says which program runs, by its dictionary name", () => {
+  const t = mount();
+  const end = new Date(Date.now() + 90 * 60000);
+  t.states["sensor.m"] = { state: "2", attributes: {} };
+  t.states["sensor.program"] = { state: "hqd_synthetic_and_coloured", attributes: {} };
+  t.states["sensor.end"] = { state: end.toISOString(), attributes: {} };
+  t.card.hass = t.hass();
+  const hhmm = end.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+  assert.equal(t.$(".small").textContent, `Sintetici · finisce alle ${hhmm}`);
+  assert.ok(!t.$$(".chips .chip").some((c) => c.textContent.includes("hqd_")));
+  // A namesake keeps its tag; an unknown key reads as before; no program, no name.
+  t.states["sensor.program"] = { state: "iot_wash_cotton", attributes: {} };
+  t.card.hass = t.hass();
+  assert.equal(t.$(".small").textContent, `Cotone · guidato · finisce alle ${hhmm}`);
+  t.states["sensor.program"] = { state: "No program", attributes: {} };
+  t.card.hass = t.hass();
+  assert.equal(t.$(".small").textContent, `Finisce alle ${hhmm}`);
 });
 
 test("without the programs attribute it falls back to the keys", () => {

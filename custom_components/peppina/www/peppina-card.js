@@ -500,6 +500,18 @@ class PeppinaCard extends HTMLElement {
     return s && !["unknown", "unavailable"].includes(s.state) ? s.state : undefined;
   }
 
+  // The running program as the picker names it, and when the cycle ends.
+  _cycleLine(end) {
+    const key = this._val("program");
+    const known = key && key !== "No program";
+    const programs = ((this._state("select") || {}).attributes || {}).programs || [];
+    const p = known && programs.find((x) => x.key === key);
+    const name = p ? tagged(p) : known ? prettyProgram(key) : "";
+    const ends = end ? `finisce alle ${hhmm(end)}` : "";
+    const line = [name, ends].filter(Boolean).join(" · ");
+    return line.charAt(0).toUpperCase() + line.slice(1);
+  }
+
   _call(domain, service, role, data = {}) {
     const id = this._id(role);
     if (!id) return;
@@ -640,7 +652,7 @@ class PeppinaCard extends HTMLElement {
       const h = Math.floor(remaining / 60);
       lcd = Number.isFinite(remaining) ? `${h}:${String(remaining % 60).padStart(2, "0")}` : "--:--";
       big = paused ? "In pausa" : PHASES[phase] || "Lava";
-      small = end ? `Finisce alle ${hhmm(end)}` : "";
+      small = this._cycleLine(end);
     } else if (delayed) {
       lcd = hhmm(delayed);
       big = "Programmata";
@@ -648,7 +660,7 @@ class PeppinaCard extends HTMLElement {
     } else if (on && mode === MODE_TIMER) {
       lcd = "TIMER";
       big = "Timer della macchina";
-      small = end ? `Finisce alle ${hhmm(end)}` : "";
+      small = this._cycleLine(end);
     } else if (on && mode === MODE_DONE) {
       lcd = "END";
       big = "Finita";
@@ -663,8 +675,6 @@ class PeppinaCard extends HTMLElement {
     this.$.small.textContent = small;
 
     const chips = [];
-    const program = this._val("program");
-    if (program && program !== "No program" && (running || paused)) chips.push(program);
     const temp = this._val("temp");
     if (temp && (running || paused)) chips.push(`${temp}°C`);
     const spin = this._val("spin");

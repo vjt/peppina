@@ -111,6 +111,14 @@ def test_presence(washer):
     assert washer.is_on
 
 
+def test_presence_as_seen(washer):
+    # The washer switching itself off after a cycle, as AWS reported it.
+    event = next(e for e in EVENTS if e["topic"] == DISCONNECTED)
+    washer.context["lastConnEvent"]["timestampEvent"] = event["payload"]["timestamp"] - 1
+    assert washer.load_event(DISCONNECTED, event["payload"])
+    assert not washer.is_on
+
+
 def test_other_topics_change_nothing(washer):
     assert washer.load_event(DISCOVERY, {"anything": 1})
     assert washer.parameters == {"remainingTimeMM": "75"}

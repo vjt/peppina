@@ -1,5 +1,19 @@
 [
  {
+  "received": "12:19:51.210",
+  "topic": "$aws/events/presence/disconnected/aa-bb-cc-dd-ee-ff",
+  "payload": {
+   "clientId": "aa-bb-cc-dd-ee-ff",
+   "timestamp": 1791713991144,
+   "eventType": "disconnected",
+   "sessionIdentifier": "scrubbed",
+   "principalIdentifier": "scrubbed",
+   "versionNumber": 2,
+   "clientInitiatedDisconnect": true,
+   "disconnectReason": "CLIENT_INITIATED_DISCONNECT"
+  }
+ },
+ {
   "received": "11:03:20.707",
   "topic": "haier/things/aa-bb-cc-dd-ee-ff/event/appliancestatus/update",
   "payload": {
@@ -2135,6 +2149,84 @@
    "eventId": "1",
    "timestamp": "2026-10-11T10:16:49.2Z",
    "transactionId": "aa-bb-cc-dd-ee-ff_2026-10-11T10:16:49.2Z"
+  }
+ },
+ {
+  "received": "12:18:46.024",
+  "topic": "haier/things/aa-bb-cc-dd-ee-ff/event/appliancestatus/update",
+  "payload": {
+   "parameters": [
+    {
+     "parName": "actualWeight",
+     "parOldVal": "5",
+     "parNewVal": "0"
+    },
+    {
+     "parName": "cloudProgId",
+     "parOldVal": "255",
+     "parNewVal": "0"
+    },
+    {
+     "parName": "cloudProgSrc",
+     "parOldVal": "2",
+     "parNewVal": "0"
+    },
+    {
+     "parName": "currentElectricityUsed",
+     "parOldVal": "0.77",
+     "parNewVal": "0.00"
+    },
+    {
+     "parName": "currentWaterUsed",
+     "parOldVal": "52",
+     "parNewVal": "0"
+    },
+    {
+     "parName": "prPhase",
+     "parOldVal": "10",
+     "parNewVal": "0"
+    },
+    {
+     "parName": "prCode",
+     "parOldVal": "124",
+     "parNewVal": "136"
+    },
+    {
+     "parName": "laundryCycleStatus",
+     "parOldVal": "1",
+     "parNewVal": "0"
+    },
+    {
+     "parName": "remainingMainWashTime",
+     "parOldVal": "0",
+     "parNewVal": "150"
+    },
+    {
+     "parName": "pause",
+     "parOldVal": "0",
+     "parNewVal": "1"
+    },
+    {
+     "parName": "standbyTimeExtended",
+     "parOldVal": "1",
+     "parNewVal": "0"
+    },
+    {
+     "parName": "machMode",
+     "parOldVal": "7",
+     "parNewVal": "1"
+    },
+    {
+     "parName": "remainingTimeMM",
+     "parOldVal": "1",
+     "parNewVal": "170"
+    }
+   ],
+   "macAddress": "aa-bb-cc-dd-ee-ff",
+   "applianceTypeName": "WM",
+   "eventId": "1",
+   "timestamp": "2026-10-11T10:18:45.9Z",
+   "transactionId": "aa-bb-cc-dd-ee-ff_2026-10-11T10:18:45.9Z"
   }
  }
 ]

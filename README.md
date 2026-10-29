@@ -46,6 +46,7 @@ For each one it adds a device with:
 | `sensor.peppina_mode` | raw hOn mode: 1 ready, 2 running, 3 paused, 5 timer, 6 error, 7 done |
 | `sensor.peppina_program_name` / `sensor.peppina_program_phase` | running program and its phase |
 | `sensor.peppina_remaining_time` / `sensor.peppina_end_time` | minutes left, and when it ends |
+| `sensor.peppina_last_cycle_end` | when the last cycle ended; survives restarts (hOn keeps it), unlike the `last_changed` of whatever your automations flip at the end |
 | `sensor.peppina_temperature` / `sensor.peppina_spin_speed` | settings of the running program |
 | `binary_sensor.peppina_door_status` / `binary_sensor.peppina_remote_control` | door open, remote control enabled |
 | `sensor.peppina_error` | hOn error code (`00` = none) |

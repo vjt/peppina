@@ -42,6 +42,11 @@ def activity_duration(appliance: Appliance, activity: dict) -> dict | None:
     }
 
 
+def activity_end(activity: dict) -> datetime | None:
+    """When the last cycle ended, as retrieve-last-activity kept it."""
+    return _when(activity.get("activityEnded"))
+
+
 class DurationWatch:
     """Reads the machine's estimates off its state, one update at a time.
 
@@ -63,6 +68,8 @@ class DurationWatch:
         self._starting: str | None = None
         # The cycle on, for how long it really took when it ends.
         self._running: str | None = None
+        # When the last cycle seen running ended, None until one does.
+        self.ended: datetime | None = None
 
     def started(self, program: str) -> None:
         """Peppina sent a start for this program."""
@@ -76,6 +83,8 @@ class DurationWatch:
         previous, self._mode = self._mode, mode
         if mode in (RUNNING, PAUSED):
             self._running = running_program(appliance) or self._running
+        if mode == DONE and previous in (RUNNING, PAUSED):
+            self.ended = self._now()
         if mode == DONE and previous in (RUNNING, PAUSED) and self._running:
             program, self._running = self._running, None
             # From the start of hOn's activity: Home Assistant may have

@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 
 from homeassistant.components.sensor import (
+    RestoreSensor,
     SensorDeviceClass,
     SensorEntity,
     SensorEntityDescription,
@@ -108,11 +109,11 @@ SENSORS = (
 
 
 async def async_setup_entry(hass, entry, async_add_entities):
+    washers = hass.data[DOMAIN][entry.entry_id]
     async_add_entities(
-        PeppinaSensor(washer, description)
-        for washer in hass.data[DOMAIN][entry.entry_id]
-        for description in SENSORS
+        PeppinaSensor(washer, description) for washer in washers for description in SENSORS
     )
+    async_add_entities(PeppinaLastEndSensor(washer) for washer in washers)
 
 
 class PeppinaSensor(PeppinaEntity, SensorEntity):
@@ -125,3 +126,26 @@ class PeppinaSensor(PeppinaEntity, SensorEntity):
     @property
     def native_value(self) -> Any:
         return self.entity_description.value(self._washer.appliance)
+
+
+class PeppinaLastEndSensor(PeppinaEntity, RestoreSensor):
+    """When the last cycle ended. Unlike the last_changed of anything that
+    follows the end, it survives a restart: hOn keeps it, and so does the
+    recorder."""
+
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+    _attr_icon = "mdi:flag-checkered"
+
+    def __init__(self, washer) -> None:
+        super().__init__(washer, "last_cycle_end", "Last cycle end")
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        if (last := await self.async_get_last_sensor_data()) and isinstance(
+            last.native_value, datetime
+        ):
+            self._washer.restore_end(last.native_value)
+
+    @property
+    def native_value(self) -> datetime | None:
+        return self._washer.last_end

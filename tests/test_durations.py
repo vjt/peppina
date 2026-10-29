@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from hon import Appliance
-from hon.durations import DurationWatch, activity_duration
+from hon.durations import DurationWatch, activity_duration, activity_end
 
 FIXTURES = Path(__file__).parent / "fixtures"
 COMMANDS = json.loads((FIXTURES / "commands.json").read_text())
@@ -132,3 +132,28 @@ def test_real_duration_at_the_end(washer, clock):
     washer.context = {}
     watch.observe(shadow(washer, machMode="2", prCode="124", remainingTimeMM="50"))
     assert watch.observe(shadow(washer, machMode="7", prCode="124")) is None
+
+
+def test_when_the_cycle_ended(washer, clock):
+    from datetime import datetime, timezone
+
+    end = datetime(2026, 10, 28, 18, 14, 38, tzinfo=timezone.utc)
+    watch = DurationWatch(clock, now=lambda: end)
+    # A first look at a finished machine (Home Assistant restarted) is not an end.
+    watch.observe(shadow(washer, machMode="7", prCode="136"))
+    assert watch.ended is None
+    watch.observe(shadow(washer, machMode="2", prCode="136", remainingTimeMM="1"))
+    watch.observe(shadow(washer, machMode="7", prCode="136"))
+    assert watch.ended == end
+    # Ready and off after the end keep it.
+    watch.observe(shadow(washer, machMode="1", prCode="136"))
+    assert watch.ended == end
+
+
+def test_activity_end():
+    from datetime import datetime, timezone
+
+    activity = {"activityStarted": "2026-10-11T08:55:19Z", "activityEnded": "2026-10-11T10:16:46Z"}
+    assert activity_end(activity) == datetime(2026, 10, 11, 10, 16, 46, tzinfo=timezone.utc)
+    assert activity_end({"activityStarted": "2026-10-11T08:55:19Z"}) is None
+    assert activity_end({}) is None

@@ -25,7 +25,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 
 from .catalog import Durations, Usage, async_texts
 from .hon import Appliance, Command, HonAuthError, HonClient, HonError
-from .hon.durations import DurationWatch, activity_duration
+from .hon.durations import DurationWatch, activity_duration, activity_end
 from .hon.programs import describe, dictionary_keys
 from .hon.push import HonPush
 
@@ -188,6 +188,8 @@ class Washer:
         # program changes: a program that does not allow one falls back.
         self.settings: dict[str, str] = {}
         self.delayed_start: datetime | None = None
+        # When the last cycle ended: seen here, else hOn's or the restored one.
+        self.last_end: datetime | None = None
         self._unsub_delayed: Callable[[], None] | None = None
         self._listeners: list[Callable[[], None]] = []
         # Pushes that land while a context is on its way, None otherwise.
@@ -233,15 +235,28 @@ class Washer:
         """Keep the machine's duration estimate, when the state shows one."""
         if reading := self._watch.observe(self.appliance):
             self.durations.keep(self.mac, reading)
+        self._ended(self._watch.ended)
+
+    def _ended(self, when: datetime | None) -> bool:
+        """Keep the latest end of a cycle; True if it moved."""
+        if when is None or (self.last_end is not None and when <= self.last_end):
+            return False
+        self.last_end = when
+        return True
+
+    def restore_end(self, when: datetime | None) -> None:
+        if self._ended(when):
+            self._notify()
 
     async def async_seed_duration(self) -> None:
-        """What hOn kept of the last cycle (estimate, real duration), where
-        the machine has not told us since."""
+        """What hOn kept of the last cycle (estimate, real duration, end),
+        where the machine has not told us since."""
         try:
             activity = await self.client.last_activity(self.appliance)
         except (aiohttp.ClientError, TimeoutError, HonError) as err:
             _LOGGER.debug("%s: no last activity from hOn (%s)", self.name, err)
             return
+        self.restore_end(activity_end(activity))
         reading = activity_duration(self.appliance, activity)
         if not reading:
             return

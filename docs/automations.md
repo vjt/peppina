@@ -243,9 +243,11 @@ critical and reaches everyone, home or away.
     after: '07:00:00'
     before: '23:00:00'
   variables:
-    critical: >-
-      {{ now() - states.input_boolean.peppina_da_stendere.last_changed
-         >= timedelta(hours=6) }}
+    # Not the last_changed of the boolean: a restart resets it.
+    finita: >-
+      {{ states('sensor.peppina_last_cycle_end')
+         | as_datetime(states.input_boolean.peppina_da_stendere.last_changed) }}
+    critical: "{{ now() - (finita | as_datetime) >= timedelta(hours=6) }}"
     destinatari: >-
       {% set ns = namespace(l=[]) %}
       {% for p, svc in [('person.alice', 'mobile_app_alice'),
@@ -263,7 +265,7 @@ critical and reaches everyone, home or away.
         data:
           message: >-
             Peppina finished at
-            {{ as_timestamp(states.input_boolean.peppina_da_stendere.last_changed) | timestamp_custom('%H:%M') }}:
+            {{ (finita | as_datetime | as_local).strftime('%H:%M') }}:
             hang the laundry
           data:
             tag: peppina_stendere

@@ -1,6 +1,8 @@
 # Plan: maintenance reminders (filter, drum, detergent drawer)
 
-Status: **plan, not built**, for review.
+Status: **implemented** in Peppina 0.7.0. "Due" is `remaining <= 0`
+(`DUE_REMAINING` in `hon/maintenance.py`): when the machine would first warn
+is still a guess. The counters are read a minute after each cycle ends.
 
 ## What hOn exposes (measured)
 

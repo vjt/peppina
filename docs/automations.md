@@ -319,6 +319,144 @@ critical and reaches everyone, home or away.
 Critical pushes need the iOS companion app's critical alerts permission;
 on Android use `channel` / `priority: high` instead of `push:`.
 
+## Cleaning reminders
+
+Peppina reads the machine's filter, drum and detergent drawer counters after
+every cycle and turns each into `binary_sensor.peppina_<x>_cleaning_due`
+(`filter`, `drawer`, `drum`), with `button.peppina_<x>_cleaning_done` to say
+it was done. Nothing nags on a timer with the machine idle: these two remind
+when someone can act on it, at the start of a cycle and on walking into the
+laundry room. Both share the list of what is due (a YAML anchor), with a
+"cleaned" action per item.
+
+```yaml
+# A cycle starts with something due: one push, to whoever is home. Resuming
+# from pause or coming back from unavailable is not a start.
+- id: peppina_cleaning_at_start
+  alias: 'Peppina: started, and something wants cleaning'
+  triggers:
+  - trigger: state
+    entity_id: sensor.peppina_mode
+    to: '2'
+    not_from: ['3', unknown, unavailable]
+  variables: &peppina_due
+    # [name, notification action, its title] of every cleaning due
+    due: >-
+      {% set ns = namespace(l=[]) %}
+      {% for key, name in [('filter', 'the filter'),
+                           ('drawer', 'the detergent drawer'),
+                           ('drum', 'the drum (autoclean)')] %}
+        {% if is_state('binary_sensor.peppina_' ~ key ~ '_cleaning_due', 'on') %}
+          {% set ns.l = ns.l + [[name, 'PEPPINA_CLEANED_' ~ key | upper, 'Cleaned ' ~ key]] %}
+        {% endif %}
+      {% endfor %}
+      {{ ns.l }}
+    listed: >-
+      {% set n = due | map(attribute=0) | list %}
+      {{ (n[:-1] | join(', ') ~ ' and ' ~ n[-1]) if n | length > 1 else n | join }}
+    buttons: >-
+      {% set ns = namespace(l=[]) %}
+      {% for name, action, title in due %}
+        {% set ns.l = ns.l + [{'action': action, 'title': title}] %}
+      {% endfor %}
+      {{ ns.l }}
+  conditions:
+  - condition: template
+    value_template: "{{ due | length > 0 }}"
+  actions:
+  - repeat:
+      for_each: >-
+        {% set ns = namespace(l=[]) %}
+        {% for p, svc in [('person.alice', 'mobile_app_alice'),
+                          ('person.bob', 'mobile_app_bob')] %}
+          {% if is_state(p, 'home') %}{% set ns.l = ns.l + [svc] %}{% endif %}
+        {% endfor %}
+        {{ ns.l }}
+      sequence:
+      - action: "notify.{{ repeat.item }}"
+        data:
+          message: "Peppina started. To clean: {{ listed }}"
+          data:
+            tag: peppina_cleaning
+            actions: "{{ buttons }}"
+  mode: single
+
+# Walking into the laundry room with something due: to that person only, at
+# most once a day. One automation per person: `this` keeps each one's last
+# run. Room presence here comes from the Wi-Fi access points; any sensor
+# that says which room someone is in will do.
+- id: peppina_cleaning_laundry_alice
+  alias: 'Peppina: something wants cleaning (Alice in the laundry room)'
+  triggers:
+  - trigger: state
+    entity_id: sensor.alice_room
+    to: laundry_room
+  variables: *peppina_due
+  conditions:
+  - condition: template
+    value_template: >-
+      {{ due | length > 0
+         and (this.attributes.last_triggered is none
+              or as_local(this.attributes.last_triggered).date() != now().date()) }}
+  actions:
+  - action: notify.mobile_app_alice
+    data:
+      message: "Peppina: to clean, {{ listed }}"
+      data:
+        tag: peppina_cleaning
+        actions: "{{ buttons }}"
+  mode: single
+
+# "Cleaned" tapped: press Peppina's done button for it.
+- id: peppina_cleaned
+  alias: 'Peppina: cleaned'
+  triggers:
+  - trigger: event
+    event_type: mobile_app_notification_action
+  conditions:
+  - condition: template
+    value_template: "{{ trigger.event.data.action.startswith('PEPPINA_CLEANED_') }}"
+  actions:
+  - action: button.press
+    target:
+      entity_id: >-
+        button.peppina_{{ trigger.event.data.action[16:] | lower }}_cleaning_done
+  mode: queued
+
+# Nothing due any more, however it got done (a push, the dashboard, the
+# machine's own maintenance cycle): drop the reminder everywhere.
+- id: peppina_cleaned_clear
+  alias: 'Peppina: all clean, clear the push'
+  triggers:
+  - trigger: state
+    entity_id:
+    - binary_sensor.peppina_filter_cleaning_due
+    - binary_sensor.peppina_drawer_cleaning_due
+    - binary_sensor.peppina_drum_cleaning_due
+    from: 'on'
+    to: 'off'
+  conditions:
+  - condition: template
+    value_template: >-
+      {{ expand('binary_sensor.peppina_filter_cleaning_due',
+                'binary_sensor.peppina_drawer_cleaning_due',
+                'binary_sensor.peppina_drum_cleaning_due')
+         | selectattr('state', 'eq', 'on') | list | length == 0 }}
+  actions:
+  - repeat:
+      for_each: [mobile_app_alice, mobile_app_bob]
+      sequence:
+      - action: "notify.{{ repeat.item }}"
+        data:
+          message: clear_notification
+          data:
+            tag: peppina_cleaning
+  mode: single
+```
+
+The dashboard asks too: a cleaning due shows on the machine, and tapping it
+asks whether it was done. The drum also offers to start the autoclean.
+
 ## Restarting Home Assistant
 
 A restart kills any automation run sitting in a `delay` or `for:`. If you

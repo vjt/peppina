@@ -57,6 +57,9 @@ For each one it adds a device with:
 | `button.<name>_stop` | stop the running program (and drop any pending delayed start) |
 | `datetime.<name>_avvio_ritardato` | start the selected program at that instant |
 | `button.<name>_annulla_avvio_ritardato` | drop the pending delayed start |
+| `sensor.<name>_filter_cleaning` / `_drawer_cleaning` / `_drum_cleaning` | how far along to the next cleaning of the filter, the detergent drawer and the drum, in percent; `count`, `tot` and `remaining` cycles as attributes. Read from hOn at start-up and after each cycle |
+| `binary_sensor.<name>_filter_cleaning_due` / `_drawer_…` / `_drum_…` | that cleaning is due (`problem`): the count has reached the total |
+| `button.<name>_filter_cleaning_done` / `_drawer_…` / `_drum_…` | cleaned: count again from here. Peppina keeps this itself (the hOn app is not needed), across restarts; a maintenance cycle run on the machine restarts the count anyway, and the end of a drum clean program counts as the drum done |
 
 The delayed start is scheduled by Home Assistant, not by the appliance: a
 start that is still in the future survives a restart, and a missed one is
@@ -82,6 +85,10 @@ appliance, with the machine drawn in SVG next to its controls. The drum turns
 while it washes and the whole machine shakes on the spin cycle. It serves no
 purpose, and it is the best part.
 
+When a cleaning is due the machine says so: the filter hatch at the bottom
+blinks, the detergent drawer comes out, suds fizz in the drum. Tap it, and it
+asks whether you cleaned it; the drum also offers to start the autoclean.
+
 <p align="center">
   <img src="docs/images/dashboard.jpg" alt="The Peppina dashboard: the washer drawn in SVG, with program, start, stop and schedule controls" width="300">
 </p>
@@ -106,6 +113,9 @@ they are what the author runs on top of it:
 - **The nag.** When the cycle ends, send a push every hour to whoever is
   home until someone taps "Stesa" (hung), plus one the moment you walk in
   the door; after 6 hours it goes critical to everyone, home or away.
+- **Cleaning reminders.** When a cycle starts with the filter, the drawer or
+  the drum due, one push to whoever is home listing them, with a "cleaned"
+  button each; the same on walking into the laundry room, at most once a day.
 
 The YAML for all of them, ready to copy, is in
 [docs/automations.md](docs/automations.md).

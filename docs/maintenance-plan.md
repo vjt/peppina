@@ -21,15 +21,12 @@ Peppina reads none of them today. Not known yet, to be measured before coding:
 - **what `count` counts**: cycles since the last reset is the obvious guess,
   but `totalWashCycle` is 323 and `count` is 44, so something reset it
   (the hOn app's "done" button, an autoclean cycle, or a firmware rule);
-- **who resets them**: whether an `hqd_autoclean` / `iot_wash_quick_drum_cleaner`
-  cycle zeroes `drumCleaning` by itself, and whether the hOn app has a reset
-  call for the filter and the drawer (the machine cannot know they were
-  cleaned by hand);
+- **who resets them**: the maintenance cycles run on the machine do (vjt);
+  which cycle zeroes which counter is to be measured;
 - **when it is "due"**: `remaining == 0`, `percentage >= 100`, or a threshold
   the app shows earlier.
 
-Method: poll the endpoint after each cycle for a couple of weeks, and capture
-the hOn app's traffic when someone taps its "done" button.
+Method: poll the endpoint after each cycle, log what moves.
 
 ## Integration (ships with Peppina, generic)
 
@@ -38,9 +35,9 @@ the hOn app's traffic when someone taps its "done" button.
 - Per counter, one `sensor` (percentage, with `count` / `tot` / `remaining`
   as attributes) and one `binary_sensor` *due* (`device_class: problem`).
   Ids: `filter_cleaning`, `drum_cleaning`, `drawer_cleaning`.
-- Per counter, a `button` *done*: it calls hOn's reset if there is one, so the
-  hOn app agrees; otherwise Peppina keeps its own offset (restored across
-  restarts) and the *due* sensor reads against it.
+- Per counter, a `button` *done*: Peppina keeps its own offset (restored
+  across restarts) and the *due* sensor reads against it. A counter the
+  machine resets by itself (a drum clean cycle) clears the offset.
 - Drum: the alert can offer "start the drum clean", which is
   `button.peppina_avvia` with `hqd_autoclean` (or the quick drum cleaner).
   If that cycle does not reset the counter by itself, its end does.
@@ -74,11 +71,14 @@ presses its *done* button. The drum also offers "start autoclean".
 No reminder on a timer with the machine idle: only at start and on entering
 the room (vjt, 2026-11-01).
 
-## Open questions
+## Decided (vjt, 2026-11-01)
 
-1. Rate limit for the room reminder: every 4 h? Once per day per item?
-2. The laundry room AP is set low (it must cover only its own room): presence
-   there shows up rarely (2 room changes in the last 7 days). Good enough,
-   or does the room trigger need a check first?
-3. The hOn "done" call: worth reverse engineering, or is a local offset
-   enough?
+- The counters were reset by the maintenance cycles already run on the
+  machine: `count` restarts after them.
+- The hOn app is out of the picture (uninstalled): *done* keeps a local
+  offset in Peppina, restored across restarts. No reverse engineering of the
+  app's reset.
+- Room reminder: **at most once a day** per person.
+- Laundry room presence works: since the AP went to 5 dBm (2026-10-31
+  evening) the one visit there (11:26–11:31 local, 2026-11-01) is the one that
+  loaded the machine.

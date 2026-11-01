@@ -1,5 +1,5 @@
-"""hOn cloud client: CIAM login, appliance list, commands, context, send,
-and the public dictionary of program names.
+"""hOn cloud client: CIAM login, appliance list, commands, context,
+maintenance counters, send, and the public dictionary of program names.
 
 Protocol ported from gvigroux/hon 0.8.4 (MIT, https://github.com/gvigroux/hon).
 Unlike upstream it runs on a session handed in by the caller and keeps TLS
@@ -179,6 +179,17 @@ class HonClient:
             "GET", "/commands/v1/retrieve-last-activity", params={"macAddress": appliance.mac}
         )
         return data or {}
+
+    async def maintenance(self, appliance: Appliance) -> dict:
+        """The maintenance counters (filterCleaning, drumCleaning,
+        drawerCleaning, lastCheckup); {} if hOn has none."""
+        data = await self._request(
+            "GET", "/commands/v1/maintenance-cycle", params={"macAddress": appliance.mac}
+        )
+        payload = dict((data or {}).get("payload") or {})
+        if payload.pop("resultCode", None) != "0":
+            return {}
+        return payload
 
     async def context(self, appliance: Appliance) -> dict:
         params = {

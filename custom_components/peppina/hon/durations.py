@@ -68,8 +68,10 @@ class DurationWatch:
         self._starting: str | None = None
         # The cycle on, for how long it really took when it ends.
         self._running: str | None = None
-        # When the last cycle seen running ended, None until one does.
+        # When the last cycle seen running ended, None until one does, and
+        # its program when known.
         self.ended: datetime | None = None
+        self.ended_program: str | None = None
 
     def started(self, program: str) -> None:
         """Peppina sent a start for this program."""
@@ -85,6 +87,7 @@ class DurationWatch:
             self._running = running_program(appliance) or self._running
         if mode == DONE and previous in (RUNNING, PAUSED):
             self.ended = self._now()
+            self.ended_program = self._running
         if mode == DONE and previous in (RUNNING, PAUSED) and self._running:
             program, self._running = self._running, None
             # From the start of hOn's activity: Home Assistant may have

@@ -145,6 +145,8 @@ def test_when_the_cycle_ended(washer, clock):
     watch.observe(shadow(washer, machMode="2", prCode="136", remainingTimeMM="1"))
     watch.observe(shadow(washer, machMode="7", prCode="136"))
     assert watch.ended == end
+    # And which program it was, for a drum clean to count as one.
+    assert watch.ended_program == "hqd_eco_40_60_degrees"
     # Ready and off after the end keep it.
     watch.observe(shadow(washer, machMode="1", prCode="136"))
     assert watch.ended == end

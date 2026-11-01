@@ -6,6 +6,10 @@
 //   name: Peppina
 //   entities: {status: binary_sensor.x_status, mode: sensor.x_mode, ...}
 // Missing roles are simply not shown.
+//
+// The cleanings (filter, drawer, drum) take three roles each: the counter
+// sensor ("filter"), its due binary_sensor ("filter_due") and its done
+// button ("filter_done"). A due one shows on the machine; tapped, it asks.
 
 const PHASES = {
   0: "Pronto", 1: "Lavaggio", 2: "Lavaggio", 3: "Centrifuga", 4: "Risciacquo",
@@ -70,8 +74,22 @@ const STRINGS = {
   startsAt: (time) => `Avvio alle ${time}`,
   noDuration: "Durata non nota",
   tooSoon: "Troppo presto",
+  // The cleanings: what the machine says when one is due, what it asks.
+  clean: {
+    filter: { hint: "Pulisci il filtro!", ask: "Hai pulito il filtro?" },
+    drawer: { hint: "Pulisci il cassetto!", ask: "Hai pulito il cassetto del detersivo?" },
+    drum: { hint: "Autoclean?", ask: "Hai pulito il cestello?" },
+  },
+  cleanCount: (n) => (n === 1 ? "1 lavaggio dall'ultima pulizia" : `${n} lavaggi dall'ultima pulizia`),
+  cleanYes: "Sì, fatto",
+  cleanNo: "Non ancora",
+  autoclean: "Avvia l'autoclean",
+  autocleanNeedsRemote: "Per l'autoclean serve il controllo remoto",
 };
 const MOST_USED = 10;
+const CLEANINGS = ["filter", "drawer", "drum"];
+// Drum clean programs, the first the machine has wins.
+const AUTOCLEAN = ["hqd_autoclean", "iot_wash_quick_drum_cleaner"];
 
 const el = (tag, cls, text) => {
   const node = document.createElement(tag);
@@ -362,6 +380,47 @@ const STYLE = `
   .washing .led, .spinning .led { fill: #36e27f; filter: drop-shadow(0 0 4px #36e27f); }
   .error .led { fill: #ff4d4d; }
 
+  /* A cleaning due: its part of the machine calls, and a tap asks. */
+  .hint { font: 700 13px/1 system-ui, sans-serif; fill: #e07a00; opacity: 0; }
+  .due-filter .hint.filter, .due-drawer .hint.drawer, .due-drum .hint.drum { opacity: 1; }
+  .due-filter [data-clean=filter], .due-drawer [data-clean=drawer],
+  .due-drum [data-clean=drum] { cursor: pointer; }
+  @keyframes nudge {
+    50% { stroke: #ff9f1c; stroke-width: 3; filter: drop-shadow(0 0 6px #ff9f1c); }
+  }
+  .due-filter .hatch rect, .due-drawer .drawer .front { animation: nudge 1s ease-in-out infinite; }
+  .drawer { transition: transform 0.6s ease; }
+  .due-drawer .drawer { transform: translate(-5px, 8px); filter: drop-shadow(0 4px 3px rgba(0,0,0,0.3)); }
+  .slot { opacity: 0; transition: opacity 0.6s ease; }
+  .due-drawer .slot { opacity: 1; }
+  .suds circle { opacity: 0; transform-box: fill-box; transform-origin: center; }
+  .due-drum:not(.washing):not(.spinning) .suds circle { animation: fizz 2.4s ease-in-out infinite; }
+  .suds circle:nth-child(2) { animation-delay: 0.4s !important; }
+  .suds circle:nth-child(3) { animation-delay: 0.9s !important; }
+  .suds circle:nth-child(4) { animation-delay: 1.3s !important; }
+  .suds circle:nth-child(5) { animation-delay: 1.8s !important; }
+  .suds circle:nth-child(6) { animation-delay: 2.1s !important; }
+  @keyframes fizz {
+    0% { opacity: 0; transform: translateY(0) scale(0.5); }
+    30% { opacity: 0.9; }
+    100% { opacity: 0; transform: translateY(-50px) scale(1.2); }
+  }
+  .ask {
+    position: fixed; inset: 0; z-index: 10;
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+  }
+  .ask .backdrop { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.45); }
+  .askbox {
+    position: relative; width: min(100%, 380px); box-sizing: border-box;
+    display: flex; flex-direction: column; gap: 12px; padding: 20px;
+    background: var(--card-background-color, #fff); color: var(--primary-text-color);
+    border-radius: 20px; box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25); text-align: center;
+    font-family: var(--paper-font-body1_-_font-family, system-ui, sans-serif);
+  }
+  .askq { font-size: 1.2em; font-weight: 600; }
+  .asknote { font-size: 0.85em; opacity: 0.7; }
+  .asknote:empty { display: none; }
+
   .shadow { transform-origin: 200px 548px; }
   .spinning .shadow { animation: pulse 0.12s linear infinite; }
   @keyframes pulse { 50% { transform: scaleX(0.94); } }
@@ -545,9 +604,13 @@ const SVG = `
     <rect x="30" y="104" width="340" height="26" fill="url(#panel)"/>
     <line x1="30" y1="130" x2="370" y2="130" stroke="#c3cbd4" stroke-width="2"/>
 
-    <rect x="52" y="44" width="70" height="44" rx="6" fill="#e3e8ee" stroke="#c3cbd4"/>
-    <rect x="58" y="50" width="28" height="32" rx="3" fill="#d2d9e0"/>
-    <rect x="90" y="50" width="26" height="32" rx="3" fill="#d2d9e0"/>
+    <rect class="slot" x="50" y="42" width="74" height="48" rx="7" fill="#3a4450"/>
+    <g class="drawer" data-clean="drawer" role="button" aria-label="${STRINGS.clean.drawer.hint}">
+      <rect class="front" x="52" y="44" width="70" height="44" rx="6" fill="#e3e8ee" stroke="#c3cbd4"/>
+      <rect x="58" y="50" width="28" height="32" rx="3" fill="#d2d9e0"/>
+      <rect x="90" y="50" width="26" height="32" rx="3" fill="#d2d9e0"/>
+    </g>
+    <text class="hint drawer" data-clean="drawer" x="50" y="120">${STRINGS.clean.drawer.hint}</text>
 
     <rect x="150" y="40" width="130" height="54" rx="10" fill="#0f1712"/>
     <text class="lcd" x="215" y="78" text-anchor="middle">--:--</text>
@@ -580,6 +643,14 @@ const SVG = `
       <circle class="bubble" cx="230" cy="380" r="4" fill="#bfe6ff"/>
       <circle class="bubble" cx="200" cy="390" r="6" fill="#bfe6ff"/>
       <circle class="bubble" cx="250" cy="365" r="3" fill="#bfe6ff"/>
+      <g class="suds">
+        <circle cx="160" cy="330" r="9" fill="#e8f6ff" stroke="#bfe6ff"/>
+        <circle cx="215" cy="345" r="6" fill="#e8f6ff" stroke="#bfe6ff"/>
+        <circle cx="245" cy="320" r="10" fill="#e8f6ff" stroke="#bfe6ff"/>
+        <circle cx="185" cy="290" r="5" fill="#e8f6ff" stroke="#bfe6ff"/>
+        <circle cx="230" cy="275" r="7" fill="#e8f6ff" stroke="#bfe6ff"/>
+        <circle cx="175" cy="360" r="6" fill="#e8f6ff" stroke="#bfe6ff"/>
+      </g>
       <path d="M135 245 a95 95 0 0 1 60 -45" stroke="rgba(255,255,255,0.35)"
             stroke-width="10" stroke-linecap="round" fill="none"/>
     </g>
@@ -591,6 +662,13 @@ const SVG = `
 
     <rect x="60" y="460" width="280" height="44" rx="10" fill="none" stroke="#c9d1d9"
           stroke-width="2"/>
+    <g class="hatch" data-clean="filter" role="button" aria-label="${STRINGS.clean.filter.hint}">
+      <rect x="292" y="468" width="38" height="28" rx="6" fill="#e3e8ee" stroke="#c3cbd4"/>
+      <circle cx="311" cy="482" r="6" fill="none" stroke="#b9c2cc" stroke-width="2"/>
+    </g>
+    <text class="hint filter" data-clean="filter" x="282" y="487" text-anchor="end">${STRINGS.clean.filter.hint}</text>
+    <circle data-clean="drum" cx="200" cy="300" r="120" fill="transparent"/>
+    <text class="hint drum" data-clean="drum" x="200" y="453" text-anchor="middle">${STRINGS.clean.drum.hint}</text>
   </g>
 </svg>`;
 
@@ -682,8 +760,54 @@ class PeppinaCard extends HTMLElement {
 
   _call(domain, service, role, data = {}) {
     const id = this._id(role);
-    if (!id) return;
-    this._hass.callService(domain, service, { entity_id: id, ...data });
+    if (!id) return undefined;
+    return this._hass.callService(domain, service, { entity_id: id, ...data });
+  }
+
+  _due(clean) {
+    return this._val(`${clean}_due`) === "on";
+  }
+
+  // The drum clean program the machine has, if the card can start one.
+  _autocleanProgram() {
+    const sel = this._state("select");
+    const options = (sel && sel.attributes.options) || [];
+    return this._id("start") ? AUTOCLEAN.find((p) => options.includes(p)) : undefined;
+  }
+
+  _ask(clean) {
+    if (!this._due(clean) || !this._id(`${clean}_done`)) return;
+    this._asking = clean;
+    const count = Number((this._state(clean) || { attributes: {} }).attributes.count);
+    this.$.askq.textContent = STRINGS.clean[clean].ask;
+    this.$.asknote.textContent = Number.isFinite(count) && count > 0 ? STRINGS.cleanCount(count) : "";
+    const program = clean === "drum" && this._autocleanProgram();
+    this.$.autoclean.classList.toggle("hidden", !program);
+    this.$.autoclean.disabled = !this._canStart;
+    this.$.autoclean.title = this._canStart ? "" : STRINGS.autocleanNeedsRemote;
+    this.$.ask.classList.remove("hidden");
+    this.$.yes.focus({ preventScroll: true });
+  }
+
+  _closeAsk() {
+    this._asking = undefined;
+    this.$.ask.classList.add("hidden");
+  }
+
+  // Select the drum clean, start it, and put the user's program back.
+  async _autoclean() {
+    const program = this._autocleanProgram();
+    const previous = this._val("select");
+    this._closeAsk();
+    if (!program) return;
+    try {
+      await this._call("select", "select_option", "select", { option: program });
+      await this._call("button", "press", "start");
+    } finally {
+      if (previous && previous !== program) {
+        this._call("select", "select_option", "select", { option: previous });
+      }
+    }
   }
 
   _fillSelect(role, select, label) {
@@ -762,6 +886,18 @@ class PeppinaCard extends HTMLElement {
           </div>
           <div class="list"></div>
         </div>
+      </div>
+      <div class="ask hidden" role="dialog" aria-modal="true">
+        <div class="backdrop"></div>
+        <div class="askbox">
+          <div class="askq"></div>
+          <div class="asknote"></div>
+          <div class="btns">
+            <button class="go yes" type="button">${STRINGS.cleanYes}</button>
+            <button class="no" type="button">${STRINGS.cleanNo}</button>
+          </div>
+          <button class="autoclean" type="button">${STRINGS.autoclean}</button>
+        </div>
       </div>`;
     const $ = (sel) => root.querySelector(sel);
     this.$ = {
@@ -771,6 +907,8 @@ class PeppinaCard extends HTMLElement {
       auto: $(".auto"), autostate: $(".autostate"), autotoggle: $(".autotoggle"),
       stop: $(".stop"), when: $(".when"), schedule: $(".schedule"), cancel: $(".cancel"),
       modes: [...root.querySelectorAll(".smode")], wlabel: $(".wlabel"), other: $(".other"),
+      svg: $("svg"), ask: $(".ask"), askq: $(".askq"), asknote: $(".asknote"), yes: $(".yes"),
+      autoclean: $(".autoclean"),
     };
     try {
       this._mode = localStorage.getItem("peppina-schedule-mode") === "end" ? "end" : "start";
@@ -801,6 +939,19 @@ class PeppinaCard extends HTMLElement {
     this.$.start.addEventListener("click", () => this._call("button", "press", "start"));
     this.$.stop.addEventListener("click", () => this._call("button", "press", "stop"));
     this.$.cancel.addEventListener("click", () => this._call("button", "press", "cancel"));
+    this.$.svg.addEventListener("click", (e) => {
+      const part = e.target.closest && e.target.closest("[data-clean]");
+      if (part) this._ask(part.dataset.clean);
+    });
+    this.$.yes.addEventListener("click", () => {
+      const clean = this._asking;
+      this._closeAsk();
+      if (clean) this._call("button", "press", `${clean}_done`);
+    });
+    for (const sel of [".ask .no", ".ask .backdrop"]) {
+      root.querySelector(sel).addEventListener("click", () => this._closeAsk());
+    }
+    this.$.autoclean.addEventListener("click", () => this._autoclean());
     this.$.schedule.addEventListener("click", () => {
       const plan = this._plan();
       if (plan && plan.start) {
@@ -834,6 +985,7 @@ class PeppinaCard extends HTMLElement {
     w.toggle("paused", on && paused);
     w.toggle("error", !!hasError);
     w.toggle("open", doorOpen && !running);
+    for (const clean of CLEANINGS) w.toggle(`due-${clean}`, this._due(clean));
 
     let lcd = "--:--";
     let big = `${name} dorme`;
@@ -916,6 +1068,7 @@ class PeppinaCard extends HTMLElement {
     }
 
     const canStart = on && remote && !running && !paused;
+    this._canStart = canStart;
     this.$.start.disabled = !canStart;
     this.$.stop.disabled = !(running || paused || delayed);
     this._canSchedule = on && remote && !running;

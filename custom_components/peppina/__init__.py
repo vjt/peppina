@@ -2,11 +2,13 @@
 
 Logs in to hOn by itself (see hon/) and, for every appliance that knows both
 the startProgram and stopProgram commands, adds its status sensors plus
-program, start, stop and delayed start controls. State changes arrive by push;
-polling stays as the fallback, every minute while the push is down.
+program, start, stop and delayed start controls, plus its maintenance
+reminders. State changes arrive by push; polling stays as the fallback, every
+minute while the push is down.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import Callable
@@ -26,6 +28,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .catalog import Durations, Usage, async_texts
 from .hon import Appliance, Command, HonAuthError, HonClient, HonError
 from .hon.durations import DurationWatch, activity_duration, activity_end
+from .hon.maintenance import DRUM, DRUM_PROGRAMS, Maintenance
 from .hon.programs import describe, dictionary_keys
 from .hon.push import HonPush
 
@@ -42,6 +45,9 @@ PLATFORMS = [
 UPDATE_INTERVAL = timedelta(seconds=60)
 # While the push is up, polling only guards against a push that went quiet.
 PUSH_UPDATE_INTERVAL = timedelta(minutes=10)
+# After a cycle ends, how long hOn gets to count it in the maintenance
+# counters before Peppina reads them again.
+MAINTENANCE_AFTER = 60
 USAGE = f"{DOMAIN}_usage"
 DURATIONS = f"{DOMAIN}_durations"
 
@@ -92,6 +98,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         for washer in washers:
             entry.async_create_background_task(
                 hass, washer.async_seed_duration(), f"{DOMAIN} last activity"
+            )
+            entry.async_create_background_task(
+                hass, washer.async_read_maintenance(), f"{DOMAIN} maintenance"
             )
 
     from .dashboard import async_save_dashboard
@@ -157,11 +166,14 @@ class Washer:
         durations: Durations,
     ) -> None:
         self.hass = hass
+        self.entry = entry
         self.client = client
         self.appliance = appliance
         self.usage = usage
         self.durations = durations
         self._watch = DurationWatch()
+        # Filter, drum and drawer counters: read at setup and after each cycle.
+        self.maintenance = Maintenance()
         # Program names and descriptions from hOn's dictionary, {} until loaded.
         self.texts: dict[str, str] = {}
         self.mac = appliance.mac
@@ -235,7 +247,13 @@ class Washer:
         """Keep the machine's duration estimate, when the state shows one."""
         if reading := self._watch.observe(self.appliance):
             self.durations.keep(self.mac, reading)
-        self._ended(self._watch.ended)
+        if self._ended(self._watch.ended):
+            drum = self._watch.ended_program in DRUM_PROGRAMS
+            self.entry.async_create_background_task(
+                self.hass,
+                self.async_read_maintenance(MAINTENANCE_AFTER, drum),
+                f"{DOMAIN} maintenance",
+            )
 
     def _ended(self, when: datetime | None) -> bool:
         """Keep the latest end of a cycle; True if it moved."""
@@ -264,6 +282,29 @@ class Washer:
         missing = {k: v for k, v in reading.items() if k == "program" or k not in known}
         if len(missing) > 1 and self.durations.keep(self.mac, missing):
             self._notify()
+
+    async def async_read_maintenance(self, delay: float = 0, drum_cleaned: bool = False) -> None:
+        """The maintenance counters; after a drum clean, the drum counts as
+        done whether or not the machine restarted its count."""
+        await asyncio.sleep(delay)
+        try:
+            payload = await self.client.maintenance(self.appliance)
+        except (aiohttp.ClientError, TimeoutError, HonError) as err:
+            _LOGGER.debug("%s: no maintenance counters from hOn (%s)", self.name, err)
+            payload = {}
+        self.maintenance.load(payload)
+        if drum_cleaned:
+            self.maintenance.done(DRUM)
+        self._notify()
+
+    def maintenance_done(self, key: str) -> None:
+        if not self.maintenance.done(key):
+            raise HomeAssistantError(f"{self.name}: hOn has not given the {key} counter yet")
+        self._notify()
+
+    def restore_maintenance(self, key: str, offset: int) -> None:
+        self.maintenance.restore(key, offset)
+        self._notify()
 
     @property
     def programs(self) -> list[str]:

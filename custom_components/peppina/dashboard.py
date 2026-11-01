@@ -48,6 +48,15 @@ ROLES = {
     "stop": "stop",
     "delayed": "delayed_start",
     "cancel": "cancel_delayed_start",
+    "filter": "filter_cleaning",
+    "filter_due": "filter_cleaning_due",
+    "filter_done": "filter_cleaning_done",
+    "drum": "drum_cleaning",
+    "drum_due": "drum_cleaning_due",
+    "drum_done": "drum_cleaning_done",
+    "drawer": "drawer_cleaning",
+    "drawer_due": "drawer_cleaning_due",
+    "drawer_done": "drawer_cleaning_done",
 }
 
 

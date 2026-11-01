@@ -16,10 +16,16 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import REVOLUTIONS_PER_MINUTE, UnitOfTemperature, UnitOfTime
+from homeassistant.const import (
+    PERCENTAGE,
+    REVOLUTIONS_PER_MINUTE,
+    UnitOfTemperature,
+    UnitOfTime,
+)
+from homeassistant.helpers.restore_state import RestoreEntity
 
 from . import DOMAIN
-from .entity import PeppinaEntity
+from .entity import MAINTENANCE, PeppinaEntity
 from .hon import WASH_DRYER, WASHING_MACHINE, Appliance
 from .hon.programs import running_program
 
@@ -114,6 +120,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
         PeppinaSensor(washer, description) for washer in washers for description in SENSORS
     )
     async_add_entities(PeppinaLastEndSensor(washer) for washer in washers)
+    async_add_entities(
+        PeppinaMaintenanceSensor(washer, key) for washer in washers for key in MAINTENANCE
+    )
 
 
 class PeppinaSensor(PeppinaEntity, SensorEntity):
@@ -149,3 +158,39 @@ class PeppinaLastEndSensor(PeppinaEntity, RestoreSensor):
     @property
     def native_value(self) -> datetime | None:
         return self._washer.last_end
+
+
+class PeppinaMaintenanceSensor(PeppinaEntity, SensorEntity, RestoreEntity):
+    """How far one cleaning is due, in percent, counting from the last one:
+    the machine's, or Peppina's *done*. The `offset` attribute is the
+    machine count *done* was pressed at, kept across restarts."""
+
+    _attr_native_unit_of_measurement = PERCENTAGE
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(self, washer, key: str) -> None:
+        label, icon = MAINTENANCE[key]
+        super().__init__(washer, key, label)
+        self._key = key
+        self._attr_icon = icon
+
+    @property
+    def native_value(self) -> int | None:
+        return self._washer.maintenance.percentage(self._key)
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        maintenance = self._washer.maintenance
+        counter = maintenance.counters.get(self._key)
+        return {
+            "count": maintenance.count(self._key),
+            "tot": counter.tot if counter else None,
+            "remaining": maintenance.remaining(self._key),
+            "offset": maintenance.offsets.get(self._key),
+        }
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last = await self.async_get_last_state()
+        if last is not None and isinstance(offset := last.attributes.get("offset"), int):
+            self._washer.restore_maintenance(self._key, offset)

@@ -6,6 +6,14 @@ from homeassistant.util import slugify
 
 from . import DOMAIN, Washer
 
+# Maintenance counter -> (label, icon). The sensor, its due binary_sensor and
+# its done button are named after the label.
+MAINTENANCE = {
+    "filter_cleaning": ("Filter cleaning", "mdi:filter-outline"),
+    "drum_cleaning": ("Drum cleaning", "mdi:washing-machine"),
+    "drawer_cleaning": ("Drawer cleaning", "mdi:tray-full"),
+}
+
 
 class PeppinaEntity(CoordinatorEntity):
     """Named after the appliance, attached to its device."""

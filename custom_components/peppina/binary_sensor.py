@@ -1,4 +1,5 @@
-"""Power, door and remote control state, as the hon integration (0.8.4) had them."""
+"""Power, door and remote control state, as the hon integration (0.8.4) had
+them, and which cleanings are due."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -11,7 +12,7 @@ from homeassistant.components.binary_sensor import (
 )
 
 from . import DOMAIN
-from .entity import PeppinaEntity
+from .entity import MAINTENANCE, PeppinaEntity
 from .hon import Appliance
 
 
@@ -49,6 +50,11 @@ async def async_setup_entry(hass, entry, async_add_entities):
         for washer in hass.data[DOMAIN][entry.entry_id]
         for description in BINARY_SENSORS
     )
+    async_add_entities(
+        PeppinaMaintenanceDue(washer, key)
+        for washer in hass.data[DOMAIN][entry.entry_id]
+        for key in MAINTENANCE
+    )
 
 
 class PeppinaBinarySensor(PeppinaEntity, BinarySensorEntity):
@@ -61,3 +67,19 @@ class PeppinaBinarySensor(PeppinaEntity, BinarySensorEntity):
     @property
     def is_on(self) -> bool:
         return self.entity_description.is_on(self._washer.appliance)
+
+
+class PeppinaMaintenanceDue(PeppinaEntity, BinarySensorEntity):
+    """On when the cleaning is due; unknown until hOn gives its counter."""
+
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+
+    def __init__(self, washer, key: str) -> None:
+        label, icon = MAINTENANCE[key]
+        super().__init__(washer, f"{key}_due", f"{label} due")
+        self._key = key
+        self._attr_icon = icon
+
+    @property
+    def is_on(self) -> bool | None:
+        return self._washer.maintenance.due(self._key)

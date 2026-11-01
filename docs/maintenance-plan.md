@@ -63,8 +63,7 @@ presses its *done* button. The drum also offers "start autoclean".
    Only to whoever is home.
 2. **On entering the laundry room.** When a known person's room goes to
    `laundry_room` and something is due: the same list, to that person only,
-   with the *done* actions. At most once every few hours per person, so
-   walking in and out does not spam.
+   with the *done* actions. At most once a day per person.
 3. *Done* from the notification or the dashboard presses the integration's
    button, and the open notifications are cleared, as for "Stesa".
 

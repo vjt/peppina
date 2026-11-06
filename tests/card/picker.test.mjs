@@ -13,7 +13,10 @@ const test = (name, fn) => {
   try { fn(); console.log("ok  ", name); } catch (e) { failures++; console.log("FAIL", name, "\n     ", e.message); }
 };
 
-function mount({ withPrograms = true, state = "hqd_smart", options, url, viewport } = {}) {
+// i18n: what hass says of the user's language; Italian unless a test says otherwise.
+const ITALIAN = { locale: { language: "it", time_format: "language" } };
+
+function mount({ withPrograms = true, state = "hqd_smart", options, url, viewport, i18n = ITALIAN } = {}) {
   const dom = new JSDOM("<!doctype html><body></body>", { runScripts: "outside-only", url: url || "https://ha.local/peppina" });
   const { window } = dom;
   if (viewport) window.visualViewport = Object.assign(new window.EventTarget(), viewport);
@@ -32,8 +35,11 @@ function mount({ withPrograms = true, state = "hqd_smart", options, url, viewpor
   card.setConfig({ entities: { status: "binary_sensor.s", mode: "sensor.m", remote: "binary_sensor.r", select: "select.p",
     program: "sensor.program", end: "sensor.end", delayed: "datetime.d" } });
   window.document.body.appendChild(card);
-  const hass = () => ({ states: { ...states }, callService: (d, s, data) => calls.push([d, s, data]) });
+  let lang = i18n;
+  const hass = () => ({ ...lang, states: { ...states }, callService: (d, s, data) => calls.push([d, s, data]) });
   card.hass = hass();
+  // The user switches language in their profile.
+  const speak = (next) => { lang = next; card.hass = hass(); };
   const root = card.shadowRoot;
   const $ = (s) => root.querySelector(s);
   const $$ = (s) => [...root.querySelectorAll(s)];
@@ -41,7 +47,7 @@ function mount({ withPrograms = true, state = "hqd_smart", options, url, viewpor
   const search = (q) => { $(".search").value = q; $(".search").dispatchEvent(new window.Event("input")); };
   const rows = () => $$(".list .prow");
   const headers = () => $$(".list .group").map((g) => g.textContent);
-  return { window, card, root, $, $$, calls, states, hass, sheetOpen, search, rows, headers };
+  return { window, card, root, $, $$, calls, states, hass, speak, sheetOpen, search, rows, headers };
 }
 
 test("the field replaces the native select and describes the program", () => {
@@ -336,6 +342,115 @@ test("dictionary text never becomes markup", () => {
   dom.$(".field").click();
   assert.equal(dom.root.querySelectorAll(".list img").length, 0);
   assert.equal(dom.$(".pname").textContent, "<img src=x onerror=alert(1)>");
+});
+
+// English, and the languages that fall back to it.
+const ENGLISH = { locale: { language: "en", time_format: "language" } };
+const label = (t, i) => t.$$(".panel label")[i].textContent;
+
+test("in English: the program field, its facts and the controls", () => {
+  const t = mount({ i18n: ENGLISH });
+  assert.equal(t.$(".pname").textContent, "Smart A.I.");  // hOn's names stay as hOn gives them
+  assert.deepEqual(t.$$(".pchips .chip").map((c) => c.textContent),
+    ["≈ 1 h 21 min", "max 9 kg", "cold–60°C", "1200 rpm"]);
+  assert.equal(t.$(".pnote").textContent, "The machine's own estimate, at 40°C and 1200 rpm");
+  assert.deepEqual([label(t, 0), label(t, 1), label(t, 2)], ["Program", "Temperature", "Spin"]);
+  assert.deepEqual([t.$(".start").textContent, t.$(".stop").textContent], ["Start", "Stop"]);
+  assert.deepEqual(t.$$(".smode").map((b) => b.textContent), ["Start at", "Finish by"]);
+  assert.deepEqual([t.$(".schedule").textContent, t.$(".cancel").textContent], ["Schedule", "Cancel"]);
+  assert.equal(t.$(".wlabel").textContent, "Starts at");
+  assert.deepEqual([t.$(".big").textContent, t.$(".small").textContent], ["Ready", "Remote control on"]);
+});
+
+test("in English: the sheet", () => {
+  const t = mount({ i18n: ENGLISH });
+  t.$(".field").click();
+  assert.equal(t.$(".search").placeholder, "Search programs");
+  assert.equal(t.$(".close").getAttribute("aria-label"), "Close");
+  assert.equal(t.headers()[0], "Most used");
+  assert.equal(t.headers().at(-1), "Others");
+  assert.equal(t.$('.prow[data-key="iot_wash_cotton"] .ptag').textContent, "guided");
+  assert.deepEqual([...t.$('.prow[data-key="hqd_cottons"] .ptop').querySelectorAll(".ppill")]
+    .map((x) => x.textContent), ["cold–90°C", "1400 rpm"]);
+  assert.equal(t.$(".pexp").getAttribute("aria-label"), "Full description");
+  t.search("zzzz");
+  assert.equal(t.$(".list .empty").textContent, "No program found");
+});
+
+test("in English: Peppina says how she is", () => {
+  const t = mount({ i18n: ENGLISH });
+  const said = () => [t.$(".big").textContent, t.$(".small").textContent];
+  t.states["binary_sensor.s"] = { state: "off", attributes: {} };
+  t.card.hass = t.hass();
+  assert.deepEqual(said(), ["Peppina is napping", "Switched off"]);
+  t.states["binary_sensor.s"] = { state: "on", attributes: {} };
+  t.states["sensor.m"] = { state: "7", attributes: {} };
+  t.card.hass = t.hass();
+  assert.deepEqual(said(), ["All done", "Waiting to be hung out"]);
+  t.states["sensor.m"] = { state: "1", attributes: {} };
+  t.states["binary_sensor.r"] = { state: "off", attributes: {}, last_changed: new Date().toISOString() };
+  t.card.hass = t.hass();
+  assert.deepEqual(said(), ["Ready", "Remote control off"]);
+  assert.ok(t.$$(".chips .chip.warn").some((c) => c.textContent === "Enable remote control on the machine"));
+  t.states["sensor.m"] = { state: "2", attributes: {} };
+  t.states["binary_sensor.r"] = { state: "on", attributes: {}, last_changed: new Date().toISOString() };
+  t.card.hass = t.hass();
+  assert.deepEqual(said(), ["Washing", ""]);
+});
+
+test("in English: times follow the profile, 12 or 24 hours", () => {
+  const start = inMinutes(120);
+  const end = new Date(start.getTime() + 81 * 60000);
+  const at = (hour12) => end.toLocaleTimeString("en", { hour: "2-digit", minute: "2-digit", hour12 });
+  const t = mount({ i18n: { locale: { language: "en", time_format: "12" } } });
+  typed(t, start);
+  assert.equal(t.$(".other").textContent, `Done ≈ ${at(true)}`);
+  assert.match(t.$(".other").textContent, /[AP]M$/);
+  const h24 = mount({ i18n: { locale: { language: "en", time_format: "24" } } });
+  typed(h24, start);
+  assert.equal(h24.$(".other").textContent, `Done ≈ ${at(false)}`);
+  assert.doesNotMatch(h24.$(".other").textContent, /[AP]M/);
+  h24.$('.smode[data-mode="end"]').click();
+  assert.equal(h24.$(".wlabel").textContent, "Done by");
+  typed(h24, inMinutes(30));
+  assert.equal(h24.$(".other").textContent, "Too soon");
+});
+
+test("in English, the machine's display keeps 24 hours", () => {
+  const t = mount({ i18n: { locale: { language: "en", time_format: "12" } } });
+  const when = inMinutes(600);
+  t.states["datetime.d"] = { state: when.toISOString(), attributes: {} };
+  t.card.hass = t.hass();
+  assert.equal(t.$(".lcd").textContent, `${pad(when.getHours())}:${pad(when.getMinutes())}`);
+  assert.equal(t.$(".big").textContent, "Scheduled");
+  assert.match(t.$(".small").textContent, /^Sets off at \d\d:\d\d [AP]M$/);
+});
+
+test("Italian for any Italian, English for any other language, or none", () => {
+  const big = (i18n) => mount({ i18n }).$(".big").textContent;
+  assert.equal(big({ locale: { language: "it-CH" } }), "Pronta");
+  assert.equal(big({ language: "it" }), "Pronta");  // hass.language alone, no locale
+  assert.equal(big({ locale: { language: "en-GB" } }), "Ready");
+  assert.equal(big({ locale: { language: "de" } }), "Ready");
+  assert.equal(big({ locale: { language: "ita" } }), "Ready");  // not Italian, despite the letters
+  assert.equal(big({}), "Ready");
+});
+
+test("a change of language in the profile rebuilds the card in it", () => {
+  const t = mount();
+  t.$(".field").click();
+  assert.equal(t.headers()[0], "Più usati");
+  t.speak(ENGLISH);
+  assert.equal(t.sheetOpen(), false);  // the sheet in the old language is gone
+  assert.equal(t.$(".start").textContent, "Start");
+  assert.equal(t.$(".big").textContent, "Ready");
+  assert.equal(t.$(".pnote").textContent, "The machine's own estimate, at 40°C and 1200 rpm");
+  t.$(".field").click();
+  assert.equal(t.headers()[0], "Most used");
+  t.$('.prow[data-key="iot_wash_cotton"]').click();
+  assert.equal(JSON.parse(JSON.stringify(t.calls)).pop()[2].option, "iot_wash_cotton");
+  t.speak(ITALIAN);
+  assert.equal(t.$(".start").textContent, "Avvia");
 });
 
 process.exitCode = failures ? 1 : 0;

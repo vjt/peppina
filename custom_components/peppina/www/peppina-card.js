@@ -10,15 +10,10 @@
 // The cleanings (filter, drawer, drum) take three roles each: the counter
 // sensor ("filter"), its due binary_sensor ("filter_due") and its done
 // button ("filter_done"). A due one shows on the machine; tapped, it asks.
+//
+// It speaks the frontend's language: Italian for Italian, English for any
+// other. Program names and descriptions come from hOn, in Home Assistant's.
 
-const PHASES = {
-  0: "Pronto", 1: "Lavaggio", 2: "Lavaggio", 3: "Centrifuga", 4: "Risciacquo",
-  5: "Risciacquo", 6: "Risciacquo", 7: "Asciugatura", 8: "Asciugatura",
-  9: "Vapore", 10: "Pronto", 11: "Centrifuga", 12: "Pesatura", 13: "Pesatura",
-  14: "Lavaggio", 15: "Lavaggio", 16: "Lavaggio", 17: "Risciacquo",
-  18: "Risciacquo", 19: "Programmato", 20: "Tumbling", 24: "Refresh",
-  25: "Lavaggio", 26: "Riscaldamento", 27: "Lavaggio",
-};
 const SPIN_PHASES = new Set([3, 11]);
 
 // hOn machMode for washers: 1 ready, 2 running, 3 paused, 5 timer, 6 error, 7 done
@@ -30,62 +25,205 @@ const MODE_DONE = 7;
 const prettyProgram = (p) =>
   p.replace(/^(hqd|iot_wash)_/, "").replace(/_/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 
-const hhmm = (d) => d.toLocaleTimeString("it-IT", { hour: "2-digit", minute: "2-digit" });
+const pad = (n) => String(n).padStart(2, "0");
+// HH:MM on 24 hours, as the machine's display and the time field show it.
+const hhmm = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+// Elsewhere times follow the user's profile: its language, and its 12 or 24
+// hours when it picks one.
+const timeFormat = (locale) => new Intl.DateTimeFormat(
+  locale.time_format === "system" ? undefined : locale.language || undefined,
+  { hour: "2-digit", minute: "2-digit", hour12: { 12: true, 24: false }[locale.time_format] },
+);
 
-// What the program picker says, in one place: the rest of the card still
-// speaks Italian inline, until it learns other languages.
-const STRINGS = {
-  search: "Cerca programma",
-  close: "Chiudi",
-  mostUsed: "Più usati",
-  others: "Altri",
-  noMatch: "Nessun programma trovato",
-  more: "Descrizione completa",
-  tags: { guided: "guidato", care: "cura capi", download: "scaricato", featured: "in evidenza" },
-  load: (kg) => `max ${kg.toLocaleString("it-IT")} kg`,
-  temp: ([lo, hi]) => {
-    const cold = "freddo";
-    if (lo === hi) return lo === 0 ? cold : `${lo}°C`;
-    return `${lo === 0 ? cold : lo}–${hi}°C`;
-  },
-  spin: (rpm) => `${rpm} giri`,
-  times: (n) => `${n}×`,
-  duration: (minutes) => {
-    const h = Math.floor(minutes / 60);
-    const m = minutes % 60;
-    return h ? `${h} h${m ? ` ${m} min` : ""}` : `${m} min`;
-  },
-  // How long the program takes: its last cycle when known, else the
-  // machine's estimate; at the settings they were for.
-  estimate: (d) => `≈ ${STRINGS.duration(d.actual || d.minutes)}`,
-  estimateNote: ({ actual, temp, spin }) => {
-    const at = [
-      temp != null && (Number(temp) === 0 ? "a freddo" : `a ${temp}°C`),
-      spin != null && (Number(spin) === 0 ? "senza centrifuga" : `${spin} giri`),
-    ].filter(Boolean);
-    const what = actual ? "Durata dell'ultimo lavaggio" : "Stima della macchina";
-    return `${what}${at.length ? `, ${at.join(" e ")}` : ""}`;
-  },
-  startAt: "Avvia alle",
-  endAt: "Finisci alle",
-  startLabel: "Avvio alle",
-  endLabel: "Fine alle",
-  endsAround: (time) => `Fine ≈ ${time}`,
-  startsAt: (time) => `Avvio alle ${time}`,
-  noDuration: "Durata non nota",
-  tooSoon: "Troppo presto",
-  // The cleanings: what the machine says when one is due, what it asks.
-  clean: {
-    filter: { hint: "Pulisci il filtro!", ask: "Hai pulito il filtro?" },
-    drawer: { hint: "Pulisci il cassetto!", ask: "Hai pulito il cassetto del detersivo?" },
-    drum: { hint: "Autoclean?", ask: "Hai pulito il cestello?" },
-  },
-  cleanCount: (n) => (n === 1 ? "1 lavaggio dall'ultima pulizia" : `${n} lavaggi dall'ultima pulizia`),
-  cleanYes: "Sì, fatto",
-  cleanNo: "Non ancora",
-  autoclean: "Avvia l'autoclean",
-  autocleanNeedsRemote: "Per l'autoclean serve il controllo remoto",
+const duration = (minutes) => {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h ? `${h} h${m ? ` ${m} min` : ""}` : `${m} min`;
 };
+const times = (n) => `${n}×`;
+// How long the program takes: its last cycle when known, else the machine's
+// estimate.
+const estimate = (d) => `≈ ${duration(d.actual || d.minutes)}`;
+
+// Every text the card shows, one table per language.
+const STRINGS = {
+  it: {
+    description: "La lavatrice.",
+    // hOn's program phases, by number.
+    phases: {
+      0: "Pronto", 1: "Lavaggio", 2: "Lavaggio", 3: "Centrifuga", 4: "Risciacquo",
+      5: "Risciacquo", 6: "Risciacquo", 7: "Asciugatura", 8: "Asciugatura",
+      9: "Vapore", 10: "Pronto", 11: "Centrifuga", 12: "Pesatura", 13: "Pesatura",
+      14: "Lavaggio", 15: "Lavaggio", 16: "Lavaggio", 17: "Risciacquo",
+      18: "Risciacquo", 19: "Programmato", 20: "Tumbling", 24: "Refresh",
+      25: "Lavaggio", 26: "Riscaldamento", 27: "Lavaggio",
+    },
+    washing: "Lava",
+    // What the machine says about itself, under it.
+    sleeps: (name) => `${name} dorme`,
+    off: "Spenta",
+    error: "Errore",
+    code: (code) => `Codice ${code}`,
+    paused: "In pausa",
+    scheduled: "Programmata",
+    setsOff: (time) => `Parte alle ${time}`,
+    machineTimer: "Timer della macchina",
+    done: "Finita",
+    doorOpen: "Sportello aperto",
+    toHang: "Da stendere",
+    ready: "Pronta",
+    remoteOn: "Controllo remoto attivo",
+    remoteOff: "Controllo remoto spento",
+    remoteNeeded: "Attiva il controllo remoto sulla macchina",
+    ends: (time) => `finisce alle ${time}`,
+    // The controls.
+    program: "Programma",
+    temperature: "Temperatura",
+    spinSpeed: "Centrifuga",
+    start: "Avvia",
+    stop: "Ferma",
+    schedule: "Programma",
+    cancel: "Annulla",
+    cold: "Freddo",
+    noSpin: "Niente",
+    autoStart: "Avvio automatico",
+    autoOn: "Attivo",
+    autoOff: "Spento",
+    startingIn: (left) => `Avvio in ${left}`,
+    turnOff: "Spegni",
+    turnOn: "Accendi",
+    // The program picker.
+    search: "Cerca programma",
+    close: "Chiudi",
+    mostUsed: "Più usati",
+    others: "Altri",
+    noMatch: "Nessun programma trovato",
+    more: "Descrizione completa",
+    tags: { guided: "guidato", care: "cura capi", download: "scaricato", featured: "in evidenza" },
+    load: (kg) => `max ${kg.toLocaleString("it-IT")} kg`,
+    temp: ([lo, hi]) => {
+      const cold = "freddo";
+      if (lo === hi) return lo === 0 ? cold : `${lo}°C`;
+      return `${lo === 0 ? cold : lo}–${hi}°C`;
+    },
+    spin: (rpm) => `${rpm} giri`,
+    // The settings the duration was for.
+    estimateNote: ({ actual, temp, spin }) => {
+      const at = [
+        temp != null && (Number(temp) === 0 ? "a freddo" : `a ${temp}°C`),
+        spin != null && (Number(spin) === 0 ? "senza centrifuga" : `${spin} giri`),
+      ].filter(Boolean);
+      const what = actual ? "Durata dell'ultimo lavaggio" : "Stima della macchina";
+      return `${what}${at.length ? `, ${at.join(" e ")}` : ""}`;
+    },
+    // The schedule.
+    startAt: "Avvia alle",
+    endAt: "Finisci alle",
+    startLabel: "Avvio alle",
+    endLabel: "Fine alle",
+    endsAround: (time) => `Fine ≈ ${time}`,
+    startsAt: (time) => `Avvio alle ${time}`,
+    noDuration: "Durata non nota",
+    tooSoon: "Troppo presto",
+    // The cleanings: what the machine says when one is due, what it asks.
+    clean: {
+      filter: { hint: "Pulisci il filtro!", ask: "Hai pulito il filtro?" },
+      drawer: { hint: "Pulisci il cassetto!", ask: "Hai pulito il cassetto del detersivo?" },
+      drum: { hint: "Autoclean?", ask: "Hai pulito il cestello?" },
+    },
+    cleanCount: (n) => (n === 1 ? "1 lavaggio dall'ultima pulizia" : `${n} lavaggi dall'ultima pulizia`),
+    cleanYes: "Sì, fatto",
+    cleanNo: "Non ancora",
+    autoclean: "Avvia l'autoclean",
+    autocleanNeedsRemote: "Per l'autoclean serve il controllo remoto",
+  },
+  en: {
+    description: "The washing machine.",
+    phases: {
+      0: "Ready", 1: "Washing", 2: "Washing", 3: "Spinning", 4: "Rinsing",
+      5: "Rinsing", 6: "Rinsing", 7: "Drying", 8: "Drying",
+      9: "Steaming", 10: "Ready", 11: "Spinning", 12: "Weighing", 13: "Weighing",
+      14: "Washing", 15: "Washing", 16: "Washing", 17: "Rinsing",
+      18: "Rinsing", 19: "Scheduled", 20: "Tumbling", 24: "Refreshing",
+      25: "Washing", 26: "Heating up", 27: "Washing",
+    },
+    washing: "Washing",
+    sleeps: (name) => `${name} is napping`,
+    off: "Switched off",
+    error: "Error",
+    code: (code) => `Code ${code}`,
+    paused: "Paused",
+    scheduled: "Scheduled",
+    setsOff: (time) => `Sets off at ${time}`,
+    machineTimer: "On the machine's timer",
+    done: "All done",
+    doorOpen: "Door open",
+    toHang: "Waiting to be hung out",
+    ready: "Ready",
+    remoteOn: "Remote control on",
+    remoteOff: "Remote control off",
+    remoteNeeded: "Enable remote control on the machine",
+    ends: (time) => `finishes at ${time}`,
+    program: "Program",
+    temperature: "Temperature",
+    spinSpeed: "Spin",
+    start: "Start",
+    stop: "Stop",
+    schedule: "Schedule",
+    cancel: "Cancel",
+    cold: "Cold",
+    noSpin: "None",
+    autoStart: "Auto start",
+    autoOn: "On",
+    autoOff: "Off",
+    startingIn: (left) => `Starting in ${left}`,
+    turnOff: "Turn off",
+    turnOn: "Turn on",
+    search: "Search programs",
+    close: "Close",
+    mostUsed: "Most used",
+    others: "Others",
+    noMatch: "No program found",
+    more: "Full description",
+    tags: { guided: "guided", care: "garment care", download: "downloaded", featured: "featured" },
+    load: (kg) => `max ${kg.toLocaleString("en")} kg`,
+    temp: ([lo, hi]) => {
+      const cold = "cold";
+      if (lo === hi) return lo === 0 ? cold : `${lo}°C`;
+      return `${lo === 0 ? cold : lo}–${hi}°C`;
+    },
+    spin: (rpm) => `${rpm} rpm`,
+    estimateNote: ({ actual, temp, spin }) => {
+      const at = [
+        temp != null && (Number(temp) === 0 ? "cold" : `at ${temp}°C`),
+        spin != null && (Number(spin) === 0 ? "no spin" : `${spin} rpm`),
+      ].filter(Boolean);
+      const what = actual ? "How long the last wash took" : "The machine's own estimate";
+      return `${what}${at.length ? `, ${at.join(" and ")}` : ""}`;
+    },
+    startAt: "Start at",
+    endAt: "Finish by",
+    startLabel: "Starts at",
+    endLabel: "Done by",
+    endsAround: (time) => `Done ≈ ${time}`,
+    startsAt: (time) => `Starts at ${time}`,
+    noDuration: "Duration unknown",
+    tooSoon: "Too soon",
+    clean: {
+      filter: { hint: "Clean the filter!", ask: "Did you clean the filter?" },
+      drawer: { hint: "Clean the drawer!", ask: "Did you clean the detergent drawer?" },
+      drum: { hint: "Autoclean?", ask: "Did you clean the drum?" },
+    },
+    cleanCount: (n) => (n === 1 ? "1 wash since the last clean" : `${n} washes since the last clean`),
+    cleanYes: "Yes, done",
+    cleanNo: "Not yet",
+    autoclean: "Start the autoclean",
+    autocleanNeedsRemote: "The autoclean needs remote control on",
+  },
+};
+// Italian for Italian, English for any other language.
+const textsFor = (language) => (/^it(-|$)/i.test(language || "") ? STRINGS.it : STRINGS.en);
+
 const MOST_USED = 10;
 const CLEANINGS = ["filter", "drawer", "drum"];
 // Drum clean programs, the first the machine has wins.
@@ -98,12 +236,12 @@ const el = (tag, cls, text) => {
   return node;
 };
 const fold = (text) => text.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
-const tagged = (p) => (p.tag ? `${p.name} · ${STRINGS.tags[p.tag] || p.tag}` : p.name);
-const facts = (p) => [
-  p.duration && STRINGS.estimate(p.duration),
-  p.load && STRINGS.load(p.load),
-  p.temp && STRINGS.temp(p.temp),
-  p.spin && STRINGS.spin(p.spin),
+const tagged = (p, t) => (p.tag ? `${p.name} · ${t.tags[p.tag] || p.tag}` : p.name);
+const facts = (p, t) => [
+  p.duration && estimate(p.duration),
+  p.load && t.load(p.load),
+  p.temp && t.temp(p.temp),
+  p.spin && t.spin(p.spin),
 ].filter(Boolean);
 
 // ?peppina_viewport in the dashboard URL shows how the browser sizes the
@@ -142,8 +280,9 @@ function viewportProbe(root) {
 // groups in the order the integration sorted them. Plain DOM in the card's
 // shadow root; texts only ever go through textContent.
 class ProgramPicker {
-  constructor(root, onPick) {
+  constructor(root, t, onPick) {
     const $ = (sel) => root.querySelector(sel);
+    this.t = t;
     this.$ = {
       box: $(".programbox"), field: $(".field"), name: $(".pname"), desc: $(".pdesc"),
       chips: $(".pchips"), note: $(".pnote"), sheet: $(".sheet"), search: $(".search"),
@@ -203,11 +342,11 @@ class ProgramPicker {
     this._value = sel.state;
     this.$.field.disabled = options.length < 2;
     const p = this._programs.find((x) => x.key === sel.state);
-    this.$.name.textContent = p ? tagged(p) : prettyProgram(sel.state || "");
+    this.$.name.textContent = p ? tagged(p, this.t) : prettyProgram(sel.state || "");
     this.$.desc.textContent = (p && p.description) || "";
     this.$.desc.classList.remove("full");
-    this.$.chips.replaceChildren(...(p ? facts(p) : []).map((t) => el("span", "chip", t)));
-    this.$.note.textContent = p && p.duration ? STRINGS.estimateNote(p.duration) : "";
+    this.$.chips.replaceChildren(...(p ? facts(p, this.t) : []).map((f) => el("span", "chip", f)));
+    this.$.note.textContent = p && p.duration ? this.t.estimateNote(p.duration) : "";
     if (this.isOpen) this._render();
   }
 
@@ -257,6 +396,7 @@ class ProgramPicker {
   }
 
   _render() {
+    const t = this.t;
     const query = fold(this.$.search.value.trim());
     const shown = query
       ? this._programs.filter((p) =>
@@ -266,20 +406,21 @@ class ProgramPicker {
     // Searching, the groups say enough: the most used would repeat them.
     const top = query ? [] : shown.filter((p) => p.usage > 0)
       .sort((a, b) => b.usage - a.usage).slice(0, MOST_USED);
-    if (top.length) nodes.push(el("div", "group", STRINGS.mostUsed), ...top.map((p) => this._row(p)));
+    if (top.length) nodes.push(el("div", "group", t.mostUsed), ...top.map((p) => this._row(p)));
     let group;
     for (const p of shown) {
-      const name = p.group_name || STRINGS.others;
+      const name = p.group_name || t.others;
       if (name !== group) nodes.push(el("div", "group", (group = name)));
       nodes.push(this._row(p));
     }
-    if (!shown.length) nodes.push(el("div", "empty", STRINGS.noMatch));
+    if (!shown.length) nodes.push(el("div", "empty", t.noMatch));
     const scroll = this.$.list.scrollTop;
     this.$.list.replaceChildren(...nodes);
     this.$.list.scrollTop = scroll;
   }
 
   _row(p) {
+    const t = this.t;
     // Not a button: it holds the button that opens the whole description.
     const row = el("div", p.key === this._value ? "prow sel" : "prow");
     row.setAttribute("role", "button");
@@ -287,13 +428,13 @@ class ProgramPicker {
     row.dataset.key = p.key;
     const head = el("span", "ptop");
     head.append(el("span", "pn", p.name));
-    if (p.tag) head.append(el("span", "ptag", STRINGS.tags[p.tag] || p.tag));
-    for (const pill of [p.temp && STRINGS.temp(p.temp), p.spin && STRINGS.spin(p.spin)]) {
+    if (p.tag) head.append(el("span", "ptag", t.tags[p.tag] || p.tag));
+    for (const pill of [p.temp && t.temp(p.temp), p.spin && t.spin(p.spin)]) {
       if (pill) head.append(el("span", "ppill", pill));
     }
     const meta = [
-      p.duration && STRINGS.duration(p.duration.actual || p.duration.minutes),
-      p.usage > 0 ? STRINGS.times(p.usage) : !p.duration && p.load && STRINGS.load(p.load),
+      p.duration && duration(p.duration.actual || p.duration.minutes),
+      p.usage > 0 ? times(p.usage) : !p.duration && p.load && t.load(p.load),
     ].filter(Boolean).join(" · ");
     if (meta) head.append(el("span", "pmeta", meta));
     row.append(head);
@@ -301,7 +442,7 @@ class ProgramPicker {
       const line = el("div", "pdline");
       const more = el("button", "pexp", "▾");
       more.type = "button";
-      more.setAttribute("aria-label", STRINGS.more);
+      more.setAttribute("aria-label", t.more);
       more.setAttribute("aria-expanded", "false");
       line.append(el("span", "pd", p.description), more);
       row.append(line);
@@ -572,7 +713,7 @@ const STYLE = `
   }
 `;
 
-const SVG = `
+const svg = (t) => `
 <svg viewBox="0 0 400 560" xmlns="http://www.w3.org/2000/svg">
   <defs>
     <linearGradient id="body" x1="0" x2="1">
@@ -605,12 +746,12 @@ const SVG = `
     <line x1="30" y1="130" x2="370" y2="130" stroke="#c3cbd4" stroke-width="2"/>
 
     <rect class="slot" x="50" y="42" width="74" height="48" rx="7" fill="#3a4450"/>
-    <g class="drawer" data-clean="drawer" role="button" aria-label="${STRINGS.clean.drawer.hint}">
+    <g class="drawer" data-clean="drawer" role="button" aria-label="${t.clean.drawer.hint}">
       <rect class="front" x="52" y="44" width="70" height="44" rx="6" fill="#e3e8ee" stroke="#c3cbd4"/>
       <rect x="58" y="50" width="28" height="32" rx="3" fill="#d2d9e0"/>
       <rect x="90" y="50" width="26" height="32" rx="3" fill="#d2d9e0"/>
     </g>
-    <text class="hint drawer" data-clean="drawer" x="50" y="120">${STRINGS.clean.drawer.hint}</text>
+    <text class="hint drawer" data-clean="drawer" x="50" y="120">${t.clean.drawer.hint}</text>
 
     <rect x="150" y="40" width="130" height="54" rx="10" fill="#0f1712"/>
     <text class="lcd" x="215" y="78" text-anchor="middle">--:--</text>
@@ -662,13 +803,13 @@ const SVG = `
 
     <rect x="60" y="460" width="280" height="44" rx="10" fill="none" stroke="#c9d1d9"
           stroke-width="2"/>
-    <g class="hatch" data-clean="filter" role="button" aria-label="${STRINGS.clean.filter.hint}">
+    <g class="hatch" data-clean="filter" role="button" aria-label="${t.clean.filter.hint}">
       <rect x="292" y="468" width="38" height="28" rx="6" fill="#e3e8ee" stroke="#c3cbd4"/>
       <circle cx="311" cy="482" r="6" fill="none" stroke="#b9c2cc" stroke-width="2"/>
     </g>
-    <text class="hint filter" data-clean="filter" x="282" y="487" text-anchor="end">${STRINGS.clean.filter.hint}</text>
+    <text class="hint filter" data-clean="filter" x="282" y="487" text-anchor="end">${t.clean.filter.hint}</text>
     <circle data-clean="drum" cx="200" cy="300" r="120" fill="transparent"/>
-    <text class="hint drum" data-clean="drum" x="200" y="453" text-anchor="middle">${STRINGS.clean.drum.hint}</text>
+    <text class="hint drum" data-clean="drum" x="200" y="453" text-anchor="middle">${t.clean.drum.hint}</text>
   </g>
 </svg>`;
 
@@ -689,8 +830,26 @@ class PeppinaCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    // The language and the time format of the user's profile.
+    const locale = hass.locale || { language: hass.language };
+    const key = `${locale.language}|${locale.time_format}`;
+    if (key !== this._localeKey) {
+      this._localeKey = key;
+      this._timeFormat = timeFormat(locale);
+      const t = textsFor(locale.language);
+      if (t !== this.t) {
+        // Another language: the card is built again, in it.
+        if (this.picker) this.picker.close();
+        this.t = t;
+        this._built = false;
+      }
+    }
     if (!this._built) this._build();
     this._update();
+  }
+
+  _clock(date) {
+    return this._timeFormat.format(date);
   }
 
   _id(role) {
@@ -729,19 +888,19 @@ class PeppinaCard extends HTMLElement {
     if (this._mode === "start") {
       return { start: at, end: minutes ? new Date(at.getTime() + minutes * 60000) : undefined };
     }
-    if (!minutes) return { error: STRINGS.noDuration };
+    if (!minutes) return { error: this.t.noDuration };
     const start = new Date(at.getTime() - minutes * 60000);
-    return start <= new Date() ? { error: STRINGS.tooSoon } : { start, end: at };
+    return start <= new Date() ? { error: this.t.tooSoon } : { start, end: at };
   }
 
   _updateSchedule() {
     for (const button of this.$.modes) button.classList.toggle("on", button.dataset.mode === this._mode);
-    this.$.wlabel.textContent = this._mode === "start" ? STRINGS.startLabel : STRINGS.endLabel;
+    this.$.wlabel.textContent = this._mode === "start" ? this.t.startLabel : this.t.endLabel;
     const plan = this._plan();
     let other = "\u00a0";  // keeps the two columns level
     if (plan && plan.error) other = plan.error;
-    else if (plan && this._mode === "end") other = STRINGS.startsAt(hhmm(plan.start));
-    else if (plan && plan.end) other = STRINGS.endsAround(hhmm(plan.end));
+    else if (plan && this._mode === "end") other = this.t.startsAt(this._clock(plan.start));
+    else if (plan && plan.end) other = this.t.endsAround(this._clock(plan.end));
     this.$.other.textContent = other;
     this.$.schedule.disabled = !this._canSchedule || !plan || !!plan.error;
   }
@@ -752,8 +911,8 @@ class PeppinaCard extends HTMLElement {
     const known = key && key !== "No program";
     const programs = ((this._state("select") || {}).attributes || {}).programs || [];
     const p = known && programs.find((x) => x.key === key);
-    const name = p ? tagged(p) : known ? prettyProgram(key) : "";
-    const ends = end ? `finisce alle ${hhmm(end)}` : "";
+    const name = p ? tagged(p, this.t) : known ? prettyProgram(key) : "";
+    const ends = end ? this.t.ends(this._clock(end)) : "";
     const line = [name, ends].filter(Boolean).join(" · ");
     return line.charAt(0).toUpperCase() + line.slice(1);
   }
@@ -779,12 +938,12 @@ class PeppinaCard extends HTMLElement {
     if (!this._due(clean) || !this._id(`${clean}_done`)) return;
     this._asking = clean;
     const count = Number((this._state(clean) || { attributes: {} }).attributes.count);
-    this.$.askq.textContent = STRINGS.clean[clean].ask;
-    this.$.asknote.textContent = Number.isFinite(count) && count > 0 ? STRINGS.cleanCount(count) : "";
+    this.$.askq.textContent = this.t.clean[clean].ask;
+    this.$.asknote.textContent = Number.isFinite(count) && count > 0 ? this.t.cleanCount(count) : "";
     const program = clean === "drum" && this._autocleanProgram();
     this.$.autoclean.classList.toggle("hidden", !program);
     this.$.autoclean.disabled = !this._canStart;
-    this.$.autoclean.title = this._canStart ? "" : STRINGS.autocleanNeedsRemote;
+    this.$.autoclean.title = this._canStart ? "" : this.t.autocleanNeedsRemote;
     this.$.ask.classList.remove("hidden");
     this.$.yes.focus({ preventScroll: true });
   }
@@ -830,18 +989,19 @@ class PeppinaCard extends HTMLElement {
   }
 
   _build() {
+    const t = this.t;
     const root = this.shadowRoot || this.attachShadow({ mode: "open" });
     root.innerHTML = `
       <style>${STYLE}</style>
       <div class="wrap">
-        <div class="stage">${SVG}</div>
+        <div class="stage">${svg(t)}</div>
         <div class="side">
         <div class="status"><div class="big"></div><div class="small"></div></div>
         <div class="panel">
           <div class="chips"></div>
           <div class="row">
             <div class="programbox">
-              <label>Programma</label>
+              <label>${t.program}</label>
               <button class="field" type="button"><span class="pname"></span><span class="caret">▾</span></button>
               <div class="pdesc"></div>
               <div class="pchips"></div>
@@ -849,40 +1009,40 @@ class PeppinaCard extends HTMLElement {
             </div>
           </div>
           <div class="row">
-            <div><label>Temperatura</label><select class="settemp"></select></div>
-            <div><label>Centrifuga</label><select class="setspin"></select></div>
+            <div><label>${t.temperature}</label><select class="settemp"></select></div>
+            <div><label>${t.spinSpeed}</label><select class="setspin"></select></div>
           </div>
           <div class="row">
-            <button class="go start">Avvia</button>
-            <button class="stop">Ferma</button>
+            <button class="go start">${t.start}</button>
+            <button class="stop">${t.stop}</button>
           </div>
           <div class="row auto">
-            <div><label>Avvio automatico</label><div class="autostate"></div></div>
+            <div><label>${t.autoStart}</label><div class="autostate"></div></div>
             <button class="autotoggle"></button>
           </div>
           <div class="seg">
-            <button type="button" class="smode" data-mode="start">${STRINGS.startAt}</button>
-            <button type="button" class="smode" data-mode="end">${STRINGS.endAt}</button>
+            <button type="button" class="smode" data-mode="start">${t.startAt}</button>
+            <button type="button" class="smode" data-mode="end">${t.endAt}</button>
           </div>
           <div class="row sched">
             <div><label class="wlabel"></label><input type="time" class="when"></div>
             <div>
               <label class="other"></label>
               <div class="btns">
-                <button class="schedule">Programma</button>
-                <button class="cancel">Annulla</button>
+                <button class="schedule">${t.schedule}</button>
+                <button class="cancel">${t.cancel}</button>
               </div>
             </div>
           </div>
         </div>
         </div>
       </div>
-      <div class="sheet hidden" role="dialog" aria-modal="true" aria-label="Programma">
+      <div class="sheet hidden" role="dialog" aria-modal="true" aria-label="${t.program}">
         <div class="backdrop"></div>
         <div class="sheetbox">
           <div class="sheethead">
-            <input class="search" type="search" autocomplete="off" placeholder="${STRINGS.search}">
-            <button class="close" type="button" aria-label="${STRINGS.close}">✕</button>
+            <input class="search" type="search" autocomplete="off" placeholder="${t.search}">
+            <button class="close" type="button" aria-label="${t.close}">✕</button>
           </div>
           <div class="list"></div>
         </div>
@@ -893,10 +1053,10 @@ class PeppinaCard extends HTMLElement {
           <div class="askq"></div>
           <div class="asknote"></div>
           <div class="btns">
-            <button class="go yes" type="button">${STRINGS.cleanYes}</button>
-            <button class="no" type="button">${STRINGS.cleanNo}</button>
+            <button class="go yes" type="button">${t.cleanYes}</button>
+            <button class="no" type="button">${t.cleanNo}</button>
           </div>
-          <button class="autoclean" type="button">${STRINGS.autoclean}</button>
+          <button class="autoclean" type="button">${t.autoclean}</button>
         </div>
       </div>`;
     const $ = (sel) => root.querySelector(sel);
@@ -927,7 +1087,7 @@ class PeppinaCard extends HTMLElement {
       });
     }
     this.$.when.addEventListener("input", () => this._updateSchedule());
-    this.picker = new ProgramPicker(root, (option) =>
+    this.picker = new ProgramPicker(root, t, (option) =>
       this._call("select", "select_option", "select", { option }));
     viewportProbe(root);
     for (const role of ["settemp", "setspin"]) {
@@ -962,6 +1122,7 @@ class PeppinaCard extends HTMLElement {
   }
 
   _update() {
+    const t = this.t;
     const name = this._config.name || "Peppina";
     const on = this._val("status") === "on";
     const mode = Number(this._val("mode"));
@@ -988,33 +1149,33 @@ class PeppinaCard extends HTMLElement {
     for (const clean of CLEANINGS) w.toggle(`due-${clean}`, this._due(clean));
 
     let lcd = "--:--";
-    let big = `${name} dorme`;
-    let small = "Spenta";
+    let big = t.sleeps(name);
+    let small = t.off;
     if (hasError) {
       lcd = `E${error}`;
-      big = "Errore";
-      small = `Codice ${error}`;
+      big = t.error;
+      small = t.code(error);
     } else if (running || (on && paused)) {
       const h = Math.floor(remaining / 60);
-      lcd = Number.isFinite(remaining) ? `${h}:${String(remaining % 60).padStart(2, "0")}` : "--:--";
-      big = paused ? "In pausa" : PHASES[phase] || "Lava";
+      lcd = Number.isFinite(remaining) ? `${h}:${pad(remaining % 60)}` : "--:--";
+      big = paused ? t.paused : t.phases[phase] || t.washing;
       small = this._cycleLine(end);
     } else if (delayed) {
       lcd = hhmm(delayed);
-      big = "Programmata";
-      small = `Parte alle ${hhmm(delayed)}`;
+      big = t.scheduled;
+      small = t.setsOff(this._clock(delayed));
     } else if (on && mode === MODE_TIMER) {
       lcd = "TIMER";
-      big = "Timer della macchina";
+      big = t.machineTimer;
       small = this._cycleLine(end);
     } else if (on && mode === MODE_DONE) {
       lcd = "END";
-      big = "Finita";
-      small = doorOpen ? "Sportello aperto" : "Da stendere";
+      big = t.done;
+      small = doorOpen ? t.doorOpen : t.toHang;
     } else if (on) {
       lcd = "0:00";
-      big = "Pronta";
-      small = remote ? "Controllo remoto attivo" : "Controllo remoto spento";
+      big = t.ready;
+      small = remote ? t.remoteOn : t.remoteOff;
     }
     this.$.lcd.textContent = lcd;
     this.$.big.textContent = big;
@@ -1024,8 +1185,8 @@ class PeppinaCard extends HTMLElement {
     const temp = this._val("temp");
     if (temp && (running || paused)) chips.push(`${temp}°C`);
     const spin = this._val("spin");
-    if (spin && (running || paused)) chips.push(`${spin} giri`);
-    if (doorOpen) chips.push("Sportello aperto");
+    if (spin && (running || paused)) chips.push(t.spin(spin));
+    if (doorOpen) chips.push(t.doorOpen);
     this.$.chips.innerHTML = "";
     for (const text of chips) {
       const c = document.createElement("span");
@@ -1036,13 +1197,13 @@ class PeppinaCard extends HTMLElement {
     if (on && !remote && !running) {
       const c = document.createElement("span");
       c.className = "chip warn";
-      c.textContent = "Attiva il controllo remoto sulla macchina";
+      c.textContent = t.remoteNeeded;
       this.$.chips.appendChild(c);
     }
 
     this.picker.update(this._state("select"));
-    this._fillSelect("settemp", this.$.settemp, (v) => (v === "0" ? "Freddo" : `${v}°C`));
-    this._fillSelect("setspin", this.$.setspin, (v) => (v === "0" ? "Niente" : `${v} giri`));
+    this._fillSelect("settemp", this.$.settemp, (v) => (v === "0" ? t.cold : `${v}°C`));
+    this._fillSelect("setspin", this.$.setspin, (v) => (v === "0" ? t.noSpin : t.spin(v)));
 
     // Optional roles of the user's own: "auto" is whatever schedules loads
     // (an automation, a switch), "watch" whatever waits to see them start.
@@ -1056,15 +1217,15 @@ class PeppinaCard extends HTMLElement {
       const left = remoteSince && on && !running && !paused && !delayed
         ? remoteSince.getTime() + (this._config.auto_after || 0) * 60000 - Date.now()
         : 0;
-      let text = "Attivo";
-      if (auto !== "on") text = "Spento";
+      let text = t.autoOn;
+      if (auto !== "on") text = t.autoOff;
       else if (left > 0) {
         const sec = Math.ceil(left / 1000);
-        text = `Avvio in ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+        text = t.startingIn(`${Math.floor(sec / 60)}:${pad(sec % 60)}`);
         this._tick = setTimeout(() => this._update(), 1000);
-      } else if (delayed) text = `Avvio alle ${hhmm(delayed)}`;
+      } else if (delayed) text = t.startsAt(this._clock(delayed));
       this.$.autostate.textContent = text;
-      this.$.autotoggle.textContent = auto === "on" ? "Spegni" : "Accendi";
+      this.$.autotoggle.textContent = auto === "on" ? t.turnOff : t.turnOn;
     }
 
     const canStart = on && remote && !running && !paused;
@@ -1078,8 +1239,7 @@ class PeppinaCard extends HTMLElement {
       const minutes = this._duration();
       const shown = this._mode === "end" && minutes
         ? new Date(delayed.getTime() + minutes * 60000) : delayed;
-      this.$.when.value = `${String(shown.getHours()).padStart(2, "0")}:${String(
-        shown.getMinutes()).padStart(2, "0")}`;
+      this.$.when.value = hhmm(shown);
     }
     this._updateSchedule();
   }
@@ -1095,4 +1255,6 @@ const define = () => {
 define();
 customElements.whenDefined("home-assistant").then(define);
 window.customCards = window.customCards || [];
-window.customCards.push({ type: "peppina-card", name: "Peppina", description: "La lavatrice." });
+window.customCards.push({
+  type: "peppina-card", name: "Peppina", description: textsFor(navigator.language).description,
+});

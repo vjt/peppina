@@ -78,6 +78,10 @@ The status entities use the same ids and states as the hon integration's, so
 their history and the automations built on them carry over when you switch.
 A second washer gets the same ids with a `_2` suffix.
 
+Peppina speaks Italian and English. Entity names follow Home Assistant's
+language, the card the language of your profile; any other language gets
+English. The entity ids stay as above in every language.
+
 ### The dashboard
 
 Peppina adds a **Peppina** sidebar dashboard: one full-page card per

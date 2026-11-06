@@ -62,23 +62,20 @@ def _end(a: Appliance) -> datetime | None:
 
 SENSORS = (
     PeppinaSensorDescription(
-        key="mode", name="Mode", icon="mdi:washing-machine", value=_text("machMode")
+        key="mode", icon="mdi:washing-machine", value=_text("machMode")
     ),
     PeppinaSensorDescription(
         key="program_phase",
-        name="Program phase",
         icon="mdi:washing-machine",
         value=lambda a: a.get("prPhase"),
     ),
     PeppinaSensorDescription(
         key="program_name",
-        name="Program name",
         icon="mdi:playlist-play",
         value=lambda a: running_program(a) or "No program",
     ),
     PeppinaSensorDescription(
         key="remaining_time",
-        name="Remaining time",
         icon="mdi:progress-clock",
         device_class=SensorDeviceClass.DURATION,
         state_class=SensorStateClass.MEASUREMENT,
@@ -87,17 +84,15 @@ SENSORS = (
     ),
     PeppinaSensorDescription(
         key="end_time",
-        name="End time",
         icon="mdi:clock-end",
         device_class=SensorDeviceClass.TIMESTAMP,
         value=_end,
     ),
     PeppinaSensorDescription(
-        key="error", name="Error", icon="mdi:math-log", value=_text("errors")
+        key="error", icon="mdi:math-log", value=_text("errors")
     ),
     PeppinaSensorDescription(
         key="temperature",
-        name="Temperature",
         device_class=SensorDeviceClass.TEMPERATURE,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfTemperature.CELSIUS,
@@ -105,7 +100,6 @@ SENSORS = (
     ),
     PeppinaSensorDescription(
         key="spin_speed",
-        name="Spin speed",
         icon="mdi:speedometer",
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=REVOLUTIONS_PER_MINUTE,
@@ -129,7 +123,7 @@ class PeppinaSensor(PeppinaEntity, SensorEntity):
     entity_description: PeppinaSensorDescription
 
     def __init__(self, washer, description: PeppinaSensorDescription) -> None:
-        super().__init__(washer, description.key, description.name)
+        super().__init__(washer, description.key)
         self.entity_description = description
 
     @property
@@ -146,7 +140,7 @@ class PeppinaLastEndSensor(PeppinaEntity, RestoreSensor):
     _attr_icon = "mdi:flag-checkered"
 
     def __init__(self, washer) -> None:
-        super().__init__(washer, "last_cycle_end", "Last cycle end")
+        super().__init__(washer, "last_cycle_end")
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
@@ -169,10 +163,9 @@ class PeppinaMaintenanceSensor(PeppinaEntity, SensorEntity, RestoreEntity):
     _attr_state_class = SensorStateClass.MEASUREMENT
 
     def __init__(self, washer, key: str) -> None:
-        label, icon = MAINTENANCE[key]
-        super().__init__(washer, key, label)
+        super().__init__(washer, key)
         self._key = key
-        self._attr_icon = icon
+        self._attr_icon = MAINTENANCE[key]
 
     @property
     def native_value(self) -> int | None:

@@ -14,7 +14,8 @@ const test = (name, fn) => {
   })());
 };
 
-function mount({ due = {}, remote = "on", mode = "1", options = ["hqd_smart", "hqd_autoclean"], roles = {} } = {}) {
+function mount({ due = {}, remote = "on", mode = "1", options = ["hqd_smart", "hqd_autoclean"], roles = {},
+  language = "it" } = {}) {
   const dom = new JSDOM("<!doctype html><body></body>", { runScripts: "outside-only", url: "https://ha.local/peppina" });
   const { window } = dom;
   window.eval(source);
@@ -36,7 +37,8 @@ function mount({ due = {}, remote = "on", mode = "1", options = ["hqd_smart", "h
   const card = window.document.createElement("peppina-card");
   card.setConfig({ entities });
   window.document.body.appendChild(card);
-  const hass = () => ({ states: { ...states }, callService: async (d, s, data) => { calls.push([d, s, data]); } });
+  const hass = () => ({ locale: { language }, states: { ...states },
+    callService: async (d, s, data) => { calls.push([d, s, data]); } });
   card.hass = hass();
   const root = card.shadowRoot;
   const $ = (s) => root.querySelector(s);
@@ -130,6 +132,30 @@ test("without the done role a due cleaning shows but does not ask", () => {
   assert.ok(t.$(".wrap").classList.contains("due-filter"));
   t.tap(".hatch rect");
   assert.equal(t.asking(), false);
+});
+
+test("in English: what the machine says, and what it asks", () => {
+  const t = mount({ due: { filter: true, drawer: true, drum: true }, language: "en" });
+  assert.deepEqual(["filter", "drawer", "drum"].map((c) => t.$(`.hint.${c}`).textContent),
+    ["Clean the filter!", "Clean the drawer!", "Autoclean?"]);
+  assert.equal(t.$(".hatch").getAttribute("aria-label"), "Clean the filter!");
+  t.tap(".hatch rect");
+  assert.equal(t.$(".askq").textContent, "Did you clean the filter?");
+  assert.equal(t.$(".asknote").textContent, "100 washes since the last clean");
+  assert.deepEqual([t.$(".ask .yes").textContent, t.$(".ask .no").textContent], ["Yes, done", "Not yet"]);
+  t.tap(".ask .no");
+  t.states["sensor.drawer"] = { state: "1", attributes: { count: 1, tot: 100, remaining: 99 } };
+  t.card.hass = t.hass();
+  t.tap(".drawer .front");
+  assert.equal(t.$(".askq").textContent, "Did you clean the detergent drawer?");
+  assert.equal(t.$(".asknote").textContent, "1 wash since the last clean");
+  t.tap(".ask .no");
+  t.tap('circle[data-clean="drum"]');
+  assert.equal(t.$(".askq").textContent, "Did you clean the drum?");
+  assert.equal(t.$(".autoclean").textContent, "Start the autoclean");
+  const off = mount({ due: { drum: true }, remote: "off", language: "en" });
+  off.tap('circle[data-clean="drum"]');
+  assert.equal(off.$(".autoclean").title, "The autoclean needs remote control on");
 });
 
 await Promise.all(pending);

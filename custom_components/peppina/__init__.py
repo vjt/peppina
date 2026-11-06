@@ -299,7 +299,11 @@ class Washer:
 
     def maintenance_done(self, key: str) -> None:
         if not self.maintenance.done(key):
-            raise HomeAssistantError(f"{self.name}: hOn has not given the {key} counter yet")
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="no_maintenance_counter",
+                translation_placeholders={"name": self.name, "key": key},
+            )
         self._notify()
 
     def restore_maintenance(self, key: str, offset: int) -> None:

@@ -24,7 +24,7 @@ class PeppinaDelayedStart(PeppinaEntity, DateTimeEntity, RestoreEntity):
     _attr_icon = "mdi:timer-play-outline"
 
     def __init__(self, washer) -> None:
-        super().__init__(washer, "delayed_start", "Avvio ritardato")
+        super().__init__(washer, "delayed_start", "avvio_ritardato")
 
     @property
     def native_value(self) -> datetime | None:
@@ -32,7 +32,9 @@ class PeppinaDelayedStart(PeppinaEntity, DateTimeEntity, RestoreEntity):
 
     async def async_set_value(self, value: datetime) -> None:
         if value <= dt_util.utcnow():
-            raise HomeAssistantError("L'avvio ritardato va messo nel futuro")
+            raise HomeAssistantError(
+                translation_domain=DOMAIN, translation_key="delayed_start_in_past"
+            )
         self._washer.schedule_start(value)
 
     async def async_added_to_hass(self) -> None:

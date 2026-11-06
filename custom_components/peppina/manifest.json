@@ -2,7 +2,11 @@
   "domain": "peppina",
   "name": "Peppina",
   "after_dependencies": [
-    "lovelace"
+    "lovelace",
+    "http"
+  ],
+  "categories": [
+    "appliances_cleaning.laundry"
   ],
   "codeowners": [
     "@vjt"
@@ -17,5 +21,5 @@
   "requirements": [
     "paho-mqtt>=2.1.0"
   ],
-  "version": "0.7.0"
+  "version": "0.7.1"
 }

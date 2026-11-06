@@ -12,7 +12,8 @@
   ],
   "config_flow": true,
   "dependencies": [
-    "frontend"
+    "frontend",
+    "http"
   ],
   "documentation": "https://github.com/vjt/peppina",
   "iot_class": "cloud_push",

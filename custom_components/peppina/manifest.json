@@ -2,7 +2,8 @@
   "domain": "peppina",
   "name": "Peppina",
   "after_dependencies": [
-    "lovelace"
+    "lovelace",
+    "http"
   ],
   "categories": [
     "appliances_cleaning.laundry"
@@ -12,8 +13,7 @@
   ],
   "config_flow": true,
   "dependencies": [
-    "frontend",
-    "http"
+    "frontend"
   ],
   "documentation": "https://github.com/vjt/peppina",
   "iot_class": "cloud_push",

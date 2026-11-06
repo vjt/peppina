@@ -17,5 +17,109 @@
     "abort": {
       "already_configured": "This hOn account is already configured."
     }
+  },
+  "entity": {
+    "binary_sensor": {
+      "status": {
+        "name": "Status"
+      },
+      "door_status": {
+        "name": "Door status"
+      },
+      "remote_control": {
+        "name": "Remote control"
+      },
+      "filter_cleaning_due": {
+        "name": "Filter cleaning due"
+      },
+      "drum_cleaning_due": {
+        "name": "Drum cleaning due"
+      },
+      "drawer_cleaning_due": {
+        "name": "Drawer cleaning due"
+      }
+    },
+    "button": {
+      "start": {
+        "name": "Start"
+      },
+      "stop": {
+        "name": "Stop"
+      },
+      "cancel_delayed_start": {
+        "name": "Cancel delayed start"
+      },
+      "filter_cleaning_done": {
+        "name": "Filter cleaning done"
+      },
+      "drum_cleaning_done": {
+        "name": "Drum cleaning done"
+      },
+      "drawer_cleaning_done": {
+        "name": "Drawer cleaning done"
+      }
+    },
+    "datetime": {
+      "delayed_start": {
+        "name": "Delayed start"
+      }
+    },
+    "select": {
+      "program": {
+        "name": "Program"
+      },
+      "set_temperature": {
+        "name": "Temperature setting"
+      },
+      "set_spin_speed": {
+        "name": "Spin speed setting"
+      }
+    },
+    "sensor": {
+      "mode": {
+        "name": "Mode"
+      },
+      "program_phase": {
+        "name": "Program phase"
+      },
+      "program_name": {
+        "name": "Program name"
+      },
+      "remaining_time": {
+        "name": "Remaining time"
+      },
+      "end_time": {
+        "name": "End time"
+      },
+      "error": {
+        "name": "Error"
+      },
+      "temperature": {
+        "name": "Temperature"
+      },
+      "spin_speed": {
+        "name": "Spin speed"
+      },
+      "last_cycle_end": {
+        "name": "Last cycle end"
+      },
+      "filter_cleaning": {
+        "name": "Filter cleaning"
+      },
+      "drum_cleaning": {
+        "name": "Drum cleaning"
+      },
+      "drawer_cleaning": {
+        "name": "Drawer cleaning"
+      }
+    }
+  },
+  "exceptions": {
+    "delayed_start_in_past": {
+      "message": "The delayed start must be in the future."
+    },
+    "no_maintenance_counter": {
+      "message": "{name}: hOn has not given the {key} counter yet."
+    }
   }
 }

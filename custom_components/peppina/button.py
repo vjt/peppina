@@ -19,7 +19,7 @@ class PeppinaStart(PeppinaEntity, ButtonEntity):
     _attr_icon = "mdi:play"
 
     def __init__(self, washer) -> None:
-        super().__init__(washer, "start", "Avvia")
+        super().__init__(washer, "start", "avvia")
 
     async def async_press(self) -> None:
         await self._washer.start()
@@ -29,7 +29,7 @@ class PeppinaStop(PeppinaEntity, ButtonEntity):
     _attr_icon = "mdi:stop"
 
     def __init__(self, washer) -> None:
-        super().__init__(washer, "stop", "Stop")
+        super().__init__(washer, "stop")
 
     async def async_press(self) -> None:
         await self._washer.stop()
@@ -39,7 +39,7 @@ class PeppinaCancelDelay(PeppinaEntity, ButtonEntity):
     _attr_icon = "mdi:timer-off-outline"
 
     def __init__(self, washer) -> None:
-        super().__init__(washer, "cancel_delayed_start", "Annulla avvio ritardato")
+        super().__init__(washer, "cancel_delayed_start", "annulla_avvio_ritardato")
 
     async def async_press(self) -> None:
         self._washer.cancel_delayed_start()
@@ -51,8 +51,7 @@ class PeppinaMaintenanceDone(PeppinaEntity, ButtonEntity):
     _attr_icon = "mdi:check-circle-outline"
 
     def __init__(self, washer, key: str) -> None:
-        label, _icon = MAINTENANCE[key]
-        super().__init__(washer, f"{key}_done", f"{label} done")
+        super().__init__(washer, f"{key}_done")
         self._key = key
 
     async def async_press(self) -> None:

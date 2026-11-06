@@ -7,10 +7,10 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from . import DOMAIN
 from .entity import PeppinaEntity
 
-# hOn key -> (unique_id tail, label, icon)
+# hOn key -> (unique_id tail, entity id tail, icon)
 SETTINGS = {
-    "temp": ("set_temperature", "Temperatura", "mdi:thermometer"),
-    "spinSpeed": ("set_spin_speed", "Centrifuga", "mdi:rotate-right"),
+    "temp": ("set_temperature", "temperatura", "mdi:thermometer"),
+    "spinSpeed": ("set_spin_speed", "centrifuga", "mdi:rotate-right"),
 }
 
 
@@ -28,7 +28,7 @@ class PeppinaProgram(PeppinaEntity, SelectEntity, RestoreEntity):
     _unrecorded_attributes = frozenset({"programs"})
 
     def __init__(self, washer) -> None:
-        super().__init__(washer, "program", "Programma")
+        super().__init__(washer, "program", "programma")
 
     @property
     def options(self) -> list[str]:
@@ -60,8 +60,8 @@ class PeppinaSetting(PeppinaEntity, SelectEntity, RestoreEntity):
     `preferred` attribute what the user picked, kept across restarts."""
 
     def __init__(self, washer, key: str) -> None:
-        tail, label, icon = SETTINGS[key]
-        super().__init__(washer, tail, label)
+        tail, object_id, icon = SETTINGS[key]
+        super().__init__(washer, tail, object_id)
         self._key = key
         self._attr_icon = icon
 

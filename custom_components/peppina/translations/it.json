@@ -17,5 +17,109 @@
     "abort": {
       "already_configured": "Questo account hOn è già configurato."
     }
+  },
+  "entity": {
+    "binary_sensor": {
+      "status": {
+        "name": "Stato"
+      },
+      "door_status": {
+        "name": "Sportello"
+      },
+      "remote_control": {
+        "name": "Controllo remoto"
+      },
+      "filter_cleaning_due": {
+        "name": "Pulizia del filtro da fare"
+      },
+      "drum_cleaning_due": {
+        "name": "Pulizia del cestello da fare"
+      },
+      "drawer_cleaning_due": {
+        "name": "Pulizia del cassetto da fare"
+      }
+    },
+    "button": {
+      "start": {
+        "name": "Avvia"
+      },
+      "stop": {
+        "name": "Stop"
+      },
+      "cancel_delayed_start": {
+        "name": "Annulla avvio ritardato"
+      },
+      "filter_cleaning_done": {
+        "name": "Filtro pulito"
+      },
+      "drum_cleaning_done": {
+        "name": "Cestello pulito"
+      },
+      "drawer_cleaning_done": {
+        "name": "Cassetto pulito"
+      }
+    },
+    "datetime": {
+      "delayed_start": {
+        "name": "Avvio ritardato"
+      }
+    },
+    "select": {
+      "program": {
+        "name": "Programma"
+      },
+      "set_temperature": {
+        "name": "Temperatura"
+      },
+      "set_spin_speed": {
+        "name": "Centrifuga"
+      }
+    },
+    "sensor": {
+      "mode": {
+        "name": "Modalità"
+      },
+      "program_phase": {
+        "name": "Fase del programma"
+      },
+      "program_name": {
+        "name": "Programma in corso"
+      },
+      "remaining_time": {
+        "name": "Tempo rimanente"
+      },
+      "end_time": {
+        "name": "Ora di fine"
+      },
+      "error": {
+        "name": "Errore"
+      },
+      "temperature": {
+        "name": "Temperatura del lavaggio"
+      },
+      "spin_speed": {
+        "name": "Centrifuga del lavaggio"
+      },
+      "last_cycle_end": {
+        "name": "Fine dell'ultimo lavaggio"
+      },
+      "filter_cleaning": {
+        "name": "Pulizia del filtro"
+      },
+      "drum_cleaning": {
+        "name": "Pulizia del cestello"
+      },
+      "drawer_cleaning": {
+        "name": "Pulizia del cassetto"
+      }
+    }
+  },
+  "exceptions": {
+    "delayed_start_in_past": {
+      "message": "L'avvio ritardato va messo nel futuro."
+    },
+    "no_maintenance_counter": {
+      "message": "{name}: hOn non ha ancora dato il contatore {key}."
+    }
   }
 }

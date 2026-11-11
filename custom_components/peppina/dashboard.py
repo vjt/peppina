@@ -64,8 +64,10 @@ async def async_setup_dashboard(hass: HomeAssistant) -> None:
     await hass.http.async_register_static_paths(
         [StaticPathConfig(CARD_URL, str(CARD_FILE), cache_headers=False)]
     )
-    # mtime busts the browser cache when the card changes
-    frontend.add_extra_js_url(hass, f"{CARD_URL}?v={int(CARD_FILE.stat().st_mtime)}")
+    # mtime busts the browser cache when the card changes; stat() is disk I/O,
+    # so it runs off the event loop.
+    stat = await hass.async_add_executor_job(CARD_FILE.stat)
+    frontend.add_extra_js_url(hass, f"{CARD_URL}?v={int(stat.st_mtime)}")
     frontend.async_register_built_in_panel(
         hass,
         component_name="lovelace",

@@ -8,6 +8,13 @@
           "email": "Email",
           "password": "Password"
         }
+      },
+      "reauth_confirm": {
+        "title": "hOn password",
+        "description": "hOn no longer accepts the password stored for {email}. Enter the one you use in the hOn app now.",
+        "data": {
+          "password": "Password"
+        }
       }
     },
     "error": {
@@ -15,7 +22,8 @@
       "cannot_connect": "Could not reach hOn, try again later."
     },
     "abort": {
-      "already_configured": "This hOn account is already configured."
+      "already_configured": "This hOn account is already configured.",
+      "reauth_successful": "Password updated, Peppina is back on hOn."
     }
   },
   "entity": {

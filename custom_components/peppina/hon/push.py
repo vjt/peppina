@@ -21,7 +21,7 @@ from typing import Callable
 import aiohttp
 import paho.mqtt.client as mqtt
 
-from .client import HonClient, HonError
+from .client import HonAuthError, HonClient, HonError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -73,8 +73,11 @@ class HonPush:
         failures = 0
         while True:
             started = time.monotonic()
+            refused = False
             try:
                 await self._connection(loop)
+            except HonAuthError as err:
+                reason, refused = str(err), True
             except aiohttp.ClientResponseError as err:
                 reason = f"HTTP {err.status}"  # its message carries the URL
             except (aiohttp.ClientError, TimeoutError, HonError, PushError) as err:
@@ -85,6 +88,12 @@ class HonPush:
             if self.connected:
                 self.connected = False
                 self._on_state(set())
+            if refused:
+                # Retrying would log in with the old password for as long as
+                # HA runs. Polling takes over and starts the reauth; once the
+                # new password is in, the entry reloads and the push with it.
+                _LOGGER.warning("hOn push stopped, hOn refused the credentials (%s)", reason)
+                return
             if time.monotonic() - started >= STABLE:
                 failures = 0
             delay = min(RETRY_MAX, RETRY_MIN * 2**failures)

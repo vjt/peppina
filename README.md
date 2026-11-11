@@ -138,6 +138,9 @@ The YAML for all of them, ready to copy, is in
 3. Settings → Devices & services → Add integration → Peppina, and log in with
    your hOn app email and password.
 
+If you change the hOn password later, Peppina stops logging in with the old
+one and Home Assistant asks for the new one in Settings → Devices & services.
+
 The hon integration is not needed. If it is installed, remove it first,
 otherwise its entities keep the ids above. Coming from Peppina 0.2, remove
 the `peppina:` line from `configuration.yaml`.
@@ -158,4 +161,7 @@ which Home Assistant shows from 2026.3 on.
 
 ## License
 
-MIT
+MIT. The hOn client in `custom_components/peppina/hon/` is ported from
+[gvigroux/hon](https://github.com/gvigroux/hon) and
+[Andre0512/pyhOn](https://github.com/Andre0512/pyhOn), both MIT: their
+notices are in `custom_components/peppina/hon/NOTICE`.

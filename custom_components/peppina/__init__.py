@@ -17,7 +17,11 @@ import aiohttp
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD, Platform
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady, HomeAssistantError
+from homeassistant.exceptions import (
+    ConfigEntryAuthFailed,
+    ConfigEntryNotReady,
+    HomeAssistantError,
+)
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -81,7 +85,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     Washer(hass, entry, client, appliance, hass.data[USAGE], hass.data[DURATIONS])
                 )
     except HonAuthError as err:
-        raise ConfigEntryError(f"hOn refused the credentials: {err}") from err
+        # Starts the reauth flow: the stored password is not sent again.
+        raise ConfigEntryAuthFailed(f"hOn refused the credentials: {err}") from err
     except (aiohttp.ClientError, TimeoutError, HonError) as err:
         raise ConfigEntryNotReady(f"hOn is unreachable: {err}") from err
     _LOGGER.info("Peppina found %d appliance(s)", len(washers))
@@ -232,6 +237,10 @@ class Washer:
         self._held = []
         try:
             self.appliance.load_context(await self.client.context(self.appliance))
+        except HonAuthError as err:
+            # The coordinator stops polling and HA asks for the new password:
+            # retrying would log in with the old one every minute, forever.
+            raise ConfigEntryAuthFailed(f"{self.name}: {err}") from err
         except (aiohttp.ClientError, TimeoutError, HonError) as err:
             raise UpdateFailed(f"{self.name}: {err}") from err
         finally:

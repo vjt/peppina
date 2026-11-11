@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from hon import Appliance, HonClient, HonError
+from hon import Appliance, HonAuthError, HonClient, HonError
 from hon import push as push_module
 from hon.push import HonPush
 
@@ -273,3 +273,31 @@ def test_push_unreachable(monkeypatch):
     fakes, log = run_push(monkeypatch, [None, ["connack"]], lambda log: log)
     assert log == [("state", set(TOPICS))]
     assert len(fakes) == 2
+
+
+def test_push_stops_on_refused_credentials(monkeypatch):
+    """A changed password ends the push: retrying would log in with the old
+    one forever. The entry's reauth restarts it."""
+    monkeypatch.setattr(push_module, "RETRY_MIN", 0)
+    log, fakes = [], []
+
+    class Client:
+        credentials = 0
+
+        async def push_credentials(self):
+            Client.credentials += 1
+            if Client.credentials > 1:
+                raise HonAuthError("no session id from /ciam/authorize (HTTP 200)")
+            return "id.token", "sig"
+
+    push = HonPush(Client(), TOPICS, lambda t, p: log.append(("message", t)), lambda g: log.append(("state", g)))
+
+    def new_client():
+        fakes.append(FakeMqtt(["connack", "drop"]))
+        return fakes[-1]
+
+    push._new_client = new_client
+    asyncio.run(asyncio.wait_for(push.run(), 5))
+    assert log == [("state", set(TOPICS)), ("state", set())]
+    assert Client.credentials == 2
+    assert not push.connected

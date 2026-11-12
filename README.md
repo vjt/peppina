@@ -46,7 +46,7 @@ For each one it adds a device with:
 | `sensor.peppina_mode` | raw hOn mode: 1 ready, 2 running, 3 paused, 5 timer, 6 error, 7 done |
 | `sensor.peppina_program_name` / `sensor.peppina_program_phase` | running program and its phase |
 | `sensor.peppina_remaining_time` / `sensor.peppina_end_time` | minutes left, and when it ends |
-| `sensor.peppina_last_cycle_end` | when the last cycle ended; survives restarts (hOn keeps it), unlike the `last_changed` of whatever your automations flip at the end |
+| `sensor.peppina_last_cycle_end` | when the last cycle ended; survives restarts (hOn keeps it), unlike the `last_changed` of whatever your automations flip at the end; its `cycles` attribute lists the last five cycles, newest first (see [Cycle history](#cycle-history)) |
 | `sensor.peppina_temperature` / `sensor.peppina_spin_speed` | settings of the running program |
 | `binary_sensor.peppina_door_status` / `binary_sensor.peppina_remote_control` | door open, remote control enabled |
 | `sensor.peppina_error` | hOn error code (`00` = none) |
@@ -93,6 +93,10 @@ When a cleaning is due the machine says so: the filter hatch at the bottom
 blinks, the detergent drawer comes out, suds fizz in the drum. Tap it, and it
 asks whether you cleaned it; the drum also offers to start the autoclean.
 
+Below the controls, the card shows the last wash (program, when, how long,
+and whether it finished or was stopped) and the few before it; **All
+washes** opens a page with every cycle Peppina kept.
+
 <p align="center">
   <img src="docs/images/dashboard.jpg" alt="The Peppina dashboard: the washer drawn in SVG, with program, start, stop and schedule controls" width="300">
 </p>
@@ -100,6 +104,27 @@ asks whether you cleaned it; the drum also offers to start the autoclean.
 <p align="center">
   <img src="docs/images/spin.gif" alt="Peppina on the spin cycle: the drum turns and the whole machine shakes" width="300">
 </p>
+
+### Cycle history
+
+Peppina logs every cycle in Home Assistant's `.storage` (`peppina.cycles`):
+program, start, end, real duration, finished or interrupted, temperature and
+spin. It keeps a year of them, a thousand at most. A cycle is what the
+machine's mode says: it starts when the machine runs and ends when it is done
+(finished) or back to ready without getting there (interrupted, as after a
+stop). The power state plays no part: it stays on while a delayed start
+waits, and flaps off in the middle of cycles.
+
+The first time it runs with an empty log, Peppina rebuilds the past from the
+recorder history of its own sensors (or those of the hon integration they
+took over), up to a year back. Where that history cannot tell how a cycle
+went, say the sensors were unavailable while it ended and nothing reported
+the end, the cycle is left out rather than guessed.
+
+The last five are in the `cycles` attribute of
+`sensor.peppina_last_cycle_end` (kept out of the recorder); the websocket
+command `peppina/cycles`, given that sensor's `entity_id`, returns all of
+them.
 
 ### What you can build on it
 
@@ -158,6 +183,10 @@ which Home Assistant shows from 2026.3 on.
   started on the knob after a remote start of a program with the same
   numeric code, it may name the remote one. When the command fits several
   programs it says "No program" rather than guess.
+- A cycle that ends while Home Assistant or Peppina is down is missing from
+  the cycle history: hOn says when the last cycle ended, not whether it
+  finished, and the rebuild from the recorder only runs on an empty log. A
+  cycle still running when they come back is logged, from hOn's start.
 
 ## License
 

@@ -1,4 +1,5 @@
-"""Sidebar dashboard: one full-page washing machine card per appliance.
+"""Sidebar dashboard: one full-page washing machine card per appliance, and
+behind it a page with every cycle it ran.
 
 Same approach as ha-verisure-italy: register a storage-mode Lovelace panel and
 rewrite its config on every load from what the entity registry holds. It rides
@@ -15,18 +16,19 @@ from homeassistant.components.http import StaticPathConfig
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 
-from . import DOMAIN, PLATFORMS
+from . import CYCLES_KEY, DOMAIN, PLATFORMS
 
 _LOGGER = logging.getLogger(__name__)
 
 URL = "peppina"
 TITLE = "Peppina"
 ICON = "mdi:washing-machine"
+HISTORY_ICON = "mdi:history"
 CARD_URL = "/peppina/peppina-card.js"
 CARD_FILE = Path(__file__).parent / "www" / "peppina-card.js"
 
 # Card keys Peppina writes; anything else on the card is the user's.
-OWN_KEYS = ("type", "name", "entities")
+OWN_KEYS = ("type", "name", "entities", "history")
 
 # Card role -> tail of our unique_id (after the mac).
 ROLES = {
@@ -57,6 +59,7 @@ ROLES = {
     "drawer": "drawer_cleaning",
     "drawer_due": "drawer_cleaning_due",
     "drawer_done": "drawer_cleaning_done",
+    "cycles": CYCLES_KEY,
 }
 
 
@@ -141,21 +144,34 @@ async def _save(hass: HomeAssistant, washers: list) -> None:
                 entity_id = registry.async_get_entity_id(domain, DOMAIN, unique_id)
                 if entity_id:
                     entities[role] = entity_id
-        views.append(
-            {
+        first = not views
+        path = "default" if first else washer.mac
+        card = {**options, "type": "custom:peppina-card", "name": washer.name, "entities": entities}
+        history = None
+        if "cycles" in entities:
+            # A subview: no tab of its own, a back arrow to the machine.
+            history = {
                 "title": washer.name,
-                "path": "default" if not views else washer.mac,
-                "icon": ICON,
+                "path": "cycles" if first else f"{washer.mac}-cycles",
+                "icon": HISTORY_ICON,
                 "type": "panel",
+                "subview": True,
+                "back_path": f"/{URL}/{path}",
                 "cards": [
                     {
-                        **options,
-                        "type": "custom:peppina-card",
+                        "type": "custom:peppina-history-card",
                         "name": washer.name,
-                        "entities": entities,
+                        "entities": {
+                            role: entities[role] for role in ("cycles", "select") if role in entities
+                        },
                     }
                 ],
             }
+            card["history"] = f"/{URL}/{history['path']}"
+        views.append(
+            {"title": washer.name, "path": path, "icon": ICON, "type": "panel", "cards": [card]}
         )
+        if history:
+            views.append(history)
 
     await storage.async_save({"views": views})

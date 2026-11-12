@@ -11,6 +11,10 @@
 // sensor ("filter"), its due binary_sensor ("filter_due") and its done
 // button ("filter_done"). A due one shows on the machine; tapped, it asks.
 //
+// The cycles it ran come with the last cycle end sensor ("cycles"), whose
+// attribute holds the last few. `history`, written by the dashboard, is the
+// path of the view where a peppina-history-card lists all of them.
+//
 // It speaks the frontend's language: Italian for Italian, English for any
 // other. Program names and descriptions come from hOn, in Home Assistant's.
 
@@ -29,10 +33,10 @@ const pad = (n) => String(n).padStart(2, "0");
 // HH:MM on 24 hours, as the machine's display and the time field show it.
 const hhmm = (d) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 // Elsewhere times follow the user's profile: its language, and its 12 or 24
-// hours when it picks one.
+// hours when it picks one. hour12: false would make English midnight 24:00.
 const timeFormat = (locale) => new Intl.DateTimeFormat(
   locale.time_format === "system" ? undefined : locale.language || undefined,
-  { hour: "2-digit", minute: "2-digit", hour12: { 12: true, 24: false }[locale.time_format] },
+  { hour: "2-digit", minute: "2-digit", hourCycle: { 12: "h12", 24: "h23" }[locale.time_format] },
 );
 
 const duration = (minutes) => {
@@ -136,6 +140,19 @@ const STRINGS = {
     cleanNo: "Non ancora",
     autoclean: "Avvia l'autoclean",
     autocleanNeedsRemote: "Per l'autoclean serve il controllo remoto",
+    // The cycles it ran: the last one, the few before, the whole history.
+    lastCycle: "Ultimo lavaggio",
+    allCycles: "Tutti i lavaggi",
+    cycles: "Lavaggi",
+    cycleCount: (n) => (n === 1 ? "1 lavaggio" : `${n} lavaggi`),
+    noCycles: "Nessun lavaggio registrato",
+    loading: "Carico i lavaggi…",
+    loadFailed: "Non riesco a leggere i lavaggi",
+    finished: "Completato",
+    interrupted: "Interrotto",
+    unknownProgram: "Programma sconosciuto",
+    today: "Oggi",
+    yesterday: "Ieri",
   },
   en: {
     description: "The washing machine.",
@@ -219,6 +236,18 @@ const STRINGS = {
     cleanNo: "Not yet",
     autoclean: "Start the autoclean",
     autocleanNeedsRemote: "The autoclean needs remote control on",
+    lastCycle: "Last wash",
+    allCycles: "All washes",
+    cycles: "Washes",
+    cycleCount: (n) => (n === 1 ? "1 wash" : `${n} washes`),
+    noCycles: "No washes recorded yet",
+    loading: "Loading the washes…",
+    loadFailed: "Could not read the washes",
+    finished: "Finished",
+    interrupted: "Interrupted",
+    unknownProgram: "Unknown program",
+    today: "Today",
+    yesterday: "Yesterday",
   },
 };
 // Italian for Italian, English for any other language.
@@ -243,6 +272,41 @@ const facts = (p, t) => [
   p.temp && t.temp(p.temp),
   p.spin && t.spin(p.spin),
 ].filter(Boolean);
+
+// The cycles it ran, as the integration logs them: {program, start, end,
+// minutes, outcome, temp, spin}. Programs go by the names the picker shows.
+const programLabel = (key, programs, t) => {
+  if (!key) return t.unknownProgram;
+  const p = programs.find((x) => x.key === key);
+  return p ? tagged(p, t) : prettyProgram(key);
+};
+const cycleSettings = (c, t) => [
+  c.temp != null && t.temp([c.temp, c.temp]),
+  c.spin ? t.spin(c.spin) : null,
+].filter(Boolean);
+const outcome = (c, t) => (c.outcome === "interrupted"
+  ? el("span", "badge stopped", t.interrupted)
+  : el("span", "badge", t.finished));
+const dayFormat = (locale) => new Intl.DateTimeFormat(
+  locale.language || undefined, { weekday: "short", day: "numeric", month: "short" },
+);
+const monthFormat = (locale) => new Intl.DateTimeFormat(
+  locale.language || undefined, { month: "long", year: "numeric" },
+);
+// Today, yesterday, else the date.
+const dayLabel = (date, t, format) => {
+  const now = new Date();
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (date.toDateString() === now.toDateString()) return t.today;
+  if (date.toDateString() === yesterday.toDateString()) return t.yesterday;
+  return format.format(date).replace(/^\p{Ll}/u, (c) => c.toUpperCase());
+};
+// To another view of the dashboard, the way the frontend's own links go.
+const navigate = (path) => {
+  window.history.pushState(null, "", path);
+  window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
+};
 
 // ?peppina_viewport in the dashboard URL shows how the browser sizes the
 // page, to see what a webview does with the keyboard (docs/program-picker.md).
@@ -450,6 +514,22 @@ class ProgramPicker {
     return row;
   }
 }
+
+// The cycles, on the card and on the history page.
+const CYCLE_STYLE = `
+  .badge {
+    flex: none; font-size: 0.75em; font-weight: 600; padding: 2px 9px; border-radius: 999px;
+    white-space: nowrap; background: rgba(54, 226, 127, 0.16); color: var(--success-color, #2e9d5b);
+  }
+  .badge.stopped { background: rgba(255, 170, 0, 0.18); color: var(--warning-color, #b36b00); }
+  .label {
+    font-size: 0.72em; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    opacity: 0.55;
+  }
+  .cchips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .cchips:empty { display: none; }
+  .cchips .chip { padding: 3px 9px; font-size: 0.8em; }
+`;
 
 const STYLE = `
   :host { display: block; height: 100%; }
@@ -701,6 +781,24 @@ const STYLE = `
     .sheet { align-items: center; }
     .sheetbox { border-radius: 20px; max-height: 80%; }
   }
+  ${CYCLE_STYLE}
+  .panel.cycles { gap: 8px; }
+  .chead { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .call {
+    padding: 0; background: none; font-size: 0.85em; color: var(--primary-color, #03a9f4);
+  }
+  .ctop { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .cname { font-size: 1.15em; font-weight: 600; min-width: 0; }
+  .cline { font-size: 0.9em; opacity: 0.75; }
+  .clist {
+    max-height: 9.5em; overflow-y: auto; overscroll-behavior: contain;
+    border-top: 1px solid var(--divider-color, #ddd);
+  }
+  .crow { display: flex; align-items: baseline; gap: 8px; padding: 7px 2px; font-size: 0.88em; }
+  .crow + .crow { border-top: 1px solid var(--divider-color, #eee); }
+  .cday, .cdur { flex: none; opacity: 0.65; white-space: nowrap; }
+  .cprog { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .crow .badge { font-size: 0.7em; }
   .hidden { display: none !important; }
   .side { display: flex; flex-direction: column; align-items: center; gap: 20px;
           width: min(100%, 560px); }
@@ -836,6 +934,8 @@ class PeppinaCard extends HTMLElement {
     if (key !== this._localeKey) {
       this._localeKey = key;
       this._timeFormat = timeFormat(locale);
+      this._dayFormat = dayFormat(locale);
+      this._cyclesShown = undefined;
       const t = textsFor(locale.language);
       if (t !== this.t) {
         // Another language: the card is built again, in it.
@@ -969,6 +1069,43 @@ class PeppinaCard extends HTMLElement {
     }
   }
 
+  // The last cycle in evidence, the few before it in a short list, and the
+  // way to the history page when the dashboard has one.
+  _updateCycles() {
+    const s = this._state("cycles");
+    const cycles = (s && s.attributes.cycles) || [];
+    this.$.cycles.classList.toggle("hidden", !cycles.length);
+    this.$.call.classList.toggle("hidden", !this._config.history);
+    const sel = this._state("select");
+    const shown = [s, sel, new Date().toDateString()];
+    const same = this._cyclesShown && shown.every((v, i) => v === this._cyclesShown[i]);
+    if (!cycles.length || same) return;
+    this._cyclesShown = shown;
+    const t = this.t;
+    const programs = (sel && sel.attributes.programs) || [];
+    const day = (date) => dayLabel(date, t, this._dayFormat);
+    const [last, ...earlier] = cycles;
+    const start = new Date(last.start);
+    const end = new Date(last.end);
+    this.$.ctop.replaceChildren(
+      el("span", "cname", programLabel(last.program, programs, t)), outcome(last, t));
+    this.$.cline.textContent =
+      `${day(start)} · ${this._clock(start)}–${this._clock(end)} · ${duration(last.minutes)}`;
+    this.$.cchips.replaceChildren(...cycleSettings(last, t).map((f) => el("span", "chip", f)));
+    this.$.clist.classList.toggle("hidden", !earlier.length);
+    this.$.clist.replaceChildren(...earlier.map((c) => {
+      const when = new Date(c.start);
+      const row = el("div", "crow");
+      row.append(
+        el("span", "cday", `${day(when)} · ${this._clock(when)}`),
+        el("span", "cprog", programLabel(c.program, programs, t)),
+        el("span", "cdur", duration(c.minutes)),
+      );
+      if (c.outcome === "interrupted") row.append(outcome(c, t));
+      return row;
+    }));
+  }
+
   _fillSelect(role, select, label) {
     const sel = this._state(role);
     select.closest("div").classList.toggle("hidden", !sel);
@@ -1035,6 +1172,16 @@ class PeppinaCard extends HTMLElement {
             </div>
           </div>
         </div>
+        <div class="panel cycles hidden">
+          <div class="chead">
+            <span class="label">${t.lastCycle}</span>
+            <button class="call" type="button">${t.allCycles} ›</button>
+          </div>
+          <div class="ctop"></div>
+          <div class="cline"></div>
+          <div class="cchips"></div>
+          <div class="clist"></div>
+        </div>
         </div>
       </div>
       <div class="sheet hidden" role="dialog" aria-modal="true" aria-label="${t.program}">
@@ -1069,7 +1216,13 @@ class PeppinaCard extends HTMLElement {
       modes: [...root.querySelectorAll(".smode")], wlabel: $(".wlabel"), other: $(".other"),
       svg: $("svg"), ask: $(".ask"), askq: $(".askq"), asknote: $(".asknote"), yes: $(".yes"),
       autoclean: $(".autoclean"),
+      cycles: $(".cycles"), call: $(".call"), ctop: $(".ctop"), cline: $(".cline"),
+      cchips: $(".cchips"), clist: $(".clist"),
     };
+    this._cyclesShown = undefined;
+    this.$.call.addEventListener("click", () => {
+      if (this._config.history) navigate(this._config.history);
+    });
     try {
       this._mode = localStorage.getItem("peppina-schedule-mode") === "end" ? "end" : "start";
     } catch (err) {
@@ -1202,6 +1355,7 @@ class PeppinaCard extends HTMLElement {
     }
 
     this.picker.update(this._state("select"));
+    this._updateCycles();
     this._fillSelect("settemp", this.$.settemp, (v) => (v === "0" ? t.cold : `${v}°C`));
     this._fillSelect("setspin", this.$.setspin, (v) => (v === "0" ? t.noSpin : t.spin(v)));
 
@@ -1245,12 +1399,154 @@ class PeppinaCard extends HTMLElement {
   }
 }
 
+const HISTORY_STYLE = `
+  :host { display: block; }
+  .hwrap {
+    min-height: calc(100vh - var(--header-height, 56px)); box-sizing: border-box;
+    display: flex; justify-content: center; padding: 16px;
+    background: var(--primary-background-color); color: var(--primary-text-color);
+    font-family: var(--paper-font-body1_-_font-family, system-ui, sans-serif);
+  }
+  .hbox { width: min(100%, 640px); display: flex; flex-direction: column; gap: 16px; }
+  .hhead { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .htitle { font-size: 1.6em; font-weight: 600; }
+  .hcount { opacity: 0.6; }
+  .month {
+    background: var(--card-background-color, #fff); border-radius: 20px; padding: 12px 16px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12); margin-bottom: 16px;
+  }
+  .month .label { padding-bottom: 4px; }
+  .hrow {
+    display: grid; grid-template-columns: 6.5em minmax(0, 1fr) auto; gap: 2px 12px;
+    align-items: baseline; padding: 10px 0;
+  }
+  .hrow + .hrow { border-top: 1px solid var(--divider-color, #eee); }
+  .hday { font-size: 0.85em; opacity: 0.65; }
+  .hprog { font-weight: 600; overflow-wrap: anywhere; }
+  .hdur { font-size: 0.9em; white-space: nowrap; text-align: right; }
+  .hsub { grid-column: 2; font-size: 0.82em; opacity: 0.7; }
+  .hrow .badge { grid-column: 3; justify-self: end; font-size: 0.7em; }
+  .hmsg { padding: 24px; text-align: center; opacity: 0.6; }
+  ${CYCLE_STYLE}
+`;
+
+// The history page: every cycle kept, newest first, month by month. The
+// integration hands the list over (peppina/cycles) and the card asks again
+// whenever the cycles sensor changes. Program names come from the select.
+class PeppinaHistoryCard extends HTMLElement {
+  setConfig(config) {
+    if (!config || !config.entities || !config.entities.cycles) {
+      throw new Error("peppina-history-card: entities.cycles required");
+    }
+    this._config = config;
+    this._built = false;
+  }
+
+  getCardSize() {
+    return 12;
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    const locale = hass.locale || { language: hass.language };
+    const key = `${locale.language}|${locale.time_format}`;
+    if (key !== this._localeKey) {
+      this._localeKey = key;
+      this.t = textsFor(locale.language);
+      this._timeFormat = timeFormat(locale);
+      this._dayFormat = dayFormat(locale);
+      this._monthFormat = monthFormat(locale);
+      this._built = false;
+    }
+    if (!this._built) this._build();
+    const source = hass.states[this._config.entities.cycles];
+    if (source !== this._source) {
+      this._source = source;
+      this._load();
+    }
+    this._render();
+  }
+
+  _build() {
+    const root = this.shadowRoot || this.attachShadow({ mode: "open" });
+    root.innerHTML = `
+      <style>${HISTORY_STYLE}</style>
+      <div class="hwrap"><div class="hbox">
+        <div class="hhead"><span class="htitle">${this.t.cycles}</span><span class="hcount"></span></div>
+        <div class="hlist"></div>
+      </div></div>`;
+    this.$ = { count: root.querySelector(".hcount"), list: root.querySelector(".hlist") };
+    this._shown = undefined;
+    this._built = true;
+  }
+
+  async _load() {
+    const asked = (this._asked = (this._asked || 0) + 1);
+    let cycles;
+    try {
+      ({ cycles } = await this._hass.callWS({
+        type: "peppina/cycles", entity_id: this._config.entities.cycles,
+      }));
+    } catch (err) {
+      cycles = undefined;
+    }
+    // A newer answer is on its way.
+    if (asked !== this._asked) return;
+    this._cycles = cycles;
+    this._failed = !cycles;
+    this._render();
+  }
+
+  _render() {
+    const t = this.t;
+    const select = this._config.entities.select;
+    const sel = select && this._hass.states[select];
+    const shown = [this._cycles, this._failed, sel, new Date().toDateString()];
+    if (this._shown && shown.every((v, i) => v === this._shown[i])) return;
+    this._shown = shown;
+    const cycles = this._cycles;
+    this.$.count.textContent = cycles && cycles.length ? t.cycleCount(cycles.length) : "";
+    if (!cycles || !cycles.length) {
+      const message = this._failed ? t.loadFailed : cycles ? t.noCycles : t.loading;
+      this.$.list.replaceChildren(el("div", "hmsg", message));
+      return;
+    }
+    const programs = (sel && sel.attributes.programs) || [];
+    const clock = (date) => this._timeFormat.format(date);
+    const months = [];
+    let month;
+    for (const c of cycles) {
+      const start = new Date(c.start);
+      const end = new Date(c.end);
+      const name = this._monthFormat.format(start);
+      if (name !== month) {
+        month = name;
+        months.push(el("div", "month"));
+        months[months.length - 1].append(el("div", "label", name));
+      }
+      const row = el("div", "hrow");
+      row.append(
+        el("span", "hday", dayLabel(start, t, this._dayFormat)),
+        el("span", "hprog", programLabel(c.program, programs, t)),
+        el("span", "hdur", duration(c.minutes)),
+        el("span", "hsub", [`${clock(start)}–${clock(end)}`, ...cycleSettings(c, t)].join(" · ")),
+        outcome(c, t),
+      );
+      months[months.length - 1].append(row);
+    }
+    this.$.list.replaceChildren(...months);
+  }
+}
+
 // The frontend swaps window.customElements for a scoped-registry polyfill
 // while it boots. Loaded before that, the card lands in the native registry
 // only, the polyfill never sees it and the page shows "Configuration error".
 // Define again, wherever window.customElements points, once the app is up.
 const define = () => {
   if (!customElements.get("peppina-card")) customElements.define("peppina-card", PeppinaCard);
+  if (!customElements.get("peppina-history-card")) {
+    customElements.define("peppina-history-card", PeppinaHistoryCard);
+  }
 };
 define();
 customElements.whenDefined("home-assistant").then(define);

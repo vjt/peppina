@@ -1,15 +1,17 @@
-"""Program names from hOn's dictionary (cached), the starts Peppina sent and
-the machine's duration estimates."""
+"""Program names from hOn's dictionary (cached), the starts Peppina sent,
+the machine's duration estimates and the cycles it ran."""
 from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timezone
 
 import aiohttp
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
 
 from .hon import HonClient, HonError
+from .hon.cycles import keep
 from .hon.programs import extract
 
 _LOGGER = logging.getLogger(__name__)
@@ -101,5 +103,32 @@ class Durations:
         if new == old:
             return False
         programs[reading["program"]] = new
+        self._store.async_delay_save(lambda: self._data, 10)
+        return True
+
+
+class Cycles:
+    """Per appliance, the cycles it ran (see hon/cycles.py), oldest first,
+    kept in .storage for a year and up to a thousand."""
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        self._store = Store(hass, 1, "peppina.cycles")
+        self._data: dict[str, list[dict]] = {}
+
+    async def async_load(self) -> None:
+        now = datetime.now(timezone.utc)
+        data = await self._store.async_load() or {}
+        self._data = {mac: keep(records, [], now) for mac, records in data.items()}
+
+    def get(self, mac: str) -> list[dict]:
+        return self._data.get(mac, [])
+
+    def add(self, mac: str, records: list[dict]) -> bool:
+        """Keep the records not kept yet; False if there was none."""
+        old = self.get(mac)
+        new = keep(old, records, datetime.now(timezone.utc))
+        if new == old:
+            return False
+        self._data[mac] = new
         self._store.async_delay_save(lambda: self._data, 10)
         return True

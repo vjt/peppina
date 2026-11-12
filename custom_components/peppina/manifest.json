@@ -3,7 +3,8 @@
   "name": "Peppina",
   "after_dependencies": [
     "lovelace",
-    "http"
+    "http",
+    "recorder"
   ],
   "categories": [
     "appliances_cleaning.laundry"

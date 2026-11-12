@@ -24,10 +24,14 @@ from homeassistant.const import (
 )
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from . import DOMAIN
+from . import CYCLES_KEY, DOMAIN
 from .entity import MAINTENANCE, PeppinaEntity
 from .hon import WASH_DRYER, WASHING_MACHINE, Appliance
+from .hon.cycles import NO_PROGRAM
 from .hon.programs import running_program
+
+# Cycles in the last cycle end sensor's attribute, for the card.
+RECENT_CYCLES = 5
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -72,7 +76,7 @@ SENSORS = (
     PeppinaSensorDescription(
         key="program_name",
         icon="mdi:playlist-play",
-        value=lambda a: running_program(a) or "No program",
+        value=lambda a: running_program(a) or NO_PROGRAM,
     ),
     PeppinaSensorDescription(
         key="remaining_time",
@@ -134,13 +138,18 @@ class PeppinaSensor(PeppinaEntity, SensorEntity):
 class PeppinaLastEndSensor(PeppinaEntity, RestoreSensor):
     """When the last cycle ended. Unlike the last_changed of anything that
     follows the end, it survives a restart: hOn keeps it, and so does the
-    recorder."""
+    recorder.
+
+    Its `cycles` attribute holds the last few of the cycle log (newest
+    first), for the card; the log itself is in .storage, so the recorder
+    leaves the attribute out."""
 
     _attr_device_class = SensorDeviceClass.TIMESTAMP
     _attr_icon = "mdi:flag-checkered"
+    _unrecorded_attributes = frozenset({"cycles"})
 
     def __init__(self, washer) -> None:
-        super().__init__(washer, "last_cycle_end")
+        super().__init__(washer, CYCLES_KEY)
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
@@ -152,6 +161,10 @@ class PeppinaLastEndSensor(PeppinaEntity, RestoreSensor):
     @property
     def native_value(self) -> datetime | None:
         return self._washer.last_end
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        return {"cycles": self._washer.recent_cycles(RECENT_CYCLES)}
 
 
 class PeppinaMaintenanceSensor(PeppinaEntity, SensorEntity, RestoreEntity):
